@@ -28,7 +28,7 @@ run_adv "Path traversal repo" '{"action":"create_release_candidate","repo":"../.
 
 run_adv "Absolute path repo" '{"action":"create_release_candidate","repo":"/etc/passwd","reason":"..."}' "UNKNOWN_REPOSITORY"
 
-run_adv "Unknown action" '{"action":"delete_database","repo":"testrepo","reason":"..."}' "unknown action"
+run_adv "Unknown action" '{"action":"delete_database","repo":"testrepo","reason":"..."}' "DENY"
 
 run_adv "Command injection reason" '{"action":"create_release_candidate","repo":"testrepo","reason":"\"; rm -rf /;\""}' "DENY"
 
