@@ -96,4 +96,24 @@ else
   exit 1
 fi
 
+
+echo "=== Scenario 6 - HowlFrame failure ==="
+# We have a valid decision, let's create a new one since DECISION_ID2 is stale
+cd "$TEMP_REPO" && git commit --allow-empty -m "clean for scenario 6" && cd - > /dev/null
+changeops validate testrepo
+changeops evaluate tests/proposal_1.json | grep -q "REQUIRE_APPROVAL" && echo "PASS: Required approval for HowlFrame failure test"
+DECISION_ID3=$(changeops evaluate tests/proposal_1.json | grep "Decision saved as" | awk '{print $4}' | tr -d '.')
+changeops approve $DECISION_ID3
+
+# Break HowlFrame by deleting the policy file temporarily
+mv changeops.hfbc changeops.hfbc.bak
+if changeops execute $DECISION_ID3 2>&1 | grep -q "Execution evaluation error"; then
+  echo "PASS: HowlFrame failure blocked execution"
+else
+  echo "FAIL: HowlFrame failure did not block execution!"
+  mv changeops.hfbc.bak changeops.hfbc
+  exit 1
+fi
+mv changeops.hfbc.bak changeops.hfbc
+
 echo "ALL TESTS PASSED"
