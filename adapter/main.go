@@ -12,6 +12,16 @@ import (
 	"time"
 )
 
+// Version is HowlChangeOps's own release version. Bumped alongside each
+// tagged release; not derived from git state at build time.
+const Version = "0.1.0"
+
+// CompatibleHowlFrameVersion is the HowlFrame release this build's
+// compiled policy (howlchangeops.hfbc) was built and verified against.
+// HowlChangeOps consumes HowlFrame entirely through its public CLI, so
+// this is a documented compatibility pin, not an enforced runtime check.
+const CompatibleHowlFrameVersion = "0.1.0"
+
 type ConfigRepo struct {
 	Path              string   `json:"path"`
 	AllowedBranches   []string `json:"allowed_branches"`
@@ -537,6 +547,15 @@ func main() {
 	if len(os.Args) < 2 {
 		fmt.Printf("Usage: %s <command> [args...]\n", progName)
 		os.Exit(1)
+	}
+
+	// version/--version must work with no config or .howlchangeops state
+	// directory present -- it's the installer's health/version check, run
+	// against a fresh install before any repo has been configured.
+	if os.Args[1] == "version" || os.Args[1] == "--version" {
+		fmt.Printf("%s %s\n", progName, Version)
+		fmt.Printf("compatible HowlFrame: v%s\n", CompatibleHowlFrameVersion)
+		return
 	}
 
 	initDirs()

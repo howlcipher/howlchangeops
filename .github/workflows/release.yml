@@ -1,0 +1,181 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  # The HowlFrame release this build's compiled policy is verified
+  # against. Keep this in lockstep with CompatibleHowlFrameVersion in
+  # adapter/main.go and the compatibility pin documented in README.md.
+  HOWLFRAME_PIN_VERSION: v0.1.0
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Download pinned HowlFrame
+        run: |
+          mkdir -p ~/.local/bin
+          wget -q https://github.com/howlcipher/howlframe/releases/download/${HOWLFRAME_PIN_VERSION}/howlframe_${HOWLFRAME_PIN_VERSION}_linux_amd64.tar.gz
+          tar -xzf howlframe_${HOWLFRAME_PIN_VERSION}_linux_amd64.tar.gz -C ~/.local/bin/
+          chmod +x ~/.local/bin/howlframe
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Build adapter
+        run: |
+          cd adapter
+          go build -o ../howlchangeops
+          cd ..
+          ln -sf howlchangeops changeops
+
+      - name: HowlFrame check and build
+        run: |
+          howlframe check src/howlchangeops.howl
+          howlframe build src/howlchangeops.howl
+          ln -sf howlchangeops.hfbc changeops.hfbc
+
+      - name: Integration tests
+        run: bash tests/integration_test.sh
+
+      - name: Adversarial tests
+        run: bash tests/adversarial_test.sh
+
+      - name: Authority bypass tests
+        run: bash tests/authority_bypass_test.sh
+
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: tar.gz
+          - goos: linux
+            goarch: arm64
+            ext: tar.gz
+          - goos: darwin
+            goarch: amd64
+            ext: tar.gz
+          - goos: darwin
+            goarch: arm64
+            ext: tar.gz
+          - goos: windows
+            goarch: amd64
+            ext: zip
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Download pinned HowlFrame (host toolchain)
+        run: |
+          mkdir -p ~/.local/bin
+          wget -q https://github.com/howlcipher/howlframe/releases/download/${HOWLFRAME_PIN_VERSION}/howlframe_${HOWLFRAME_PIN_VERSION}_linux_amd64.tar.gz
+          tar -xzf howlframe_${HOWLFRAME_PIN_VERSION}_linux_amd64.tar.gz -C ~/.local/bin/
+          chmod +x ~/.local/bin/howlframe
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Compile policy (host-side; .hfbc is platform-independent bytecode)
+        run: |
+          howlframe check src/howlchangeops.howl
+          howlframe build src/howlchangeops.howl
+
+      - name: Build adapter binary and assemble archive
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          BIN=howlchangeops
+          ALIAS=changeops
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BIN=howlchangeops.exe
+            ALIAS=changeops.exe
+          fi
+
+          STAGE=$(mktemp -d)
+          go build -o "$STAGE/$BIN" ./adapter
+          # The changeops alias ships as a real second copy, not a symlink:
+          # Howl's archive extractor rejects symlinked/hardlinked entries.
+          cp "$STAGE/$BIN" "$STAGE/$ALIAS"
+          cp howlchangeops.hfbc "$STAGE/howlchangeops.hfbc"
+          cp config/howlchangeops-config.example.json "$STAGE/howlchangeops-config.example.json"
+
+          ARCHIVE_NAME=howlchangeops_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}
+          if [ "${{ matrix.ext }}" = "zip" ]; then
+            (cd "$STAGE" && zip "${ARCHIVE_NAME}.zip" ./*)
+            mv "$STAGE/${ARCHIVE_NAME}.zip" .
+          else
+            tar -czf "${ARCHIVE_NAME}.tar.gz" -C "$STAGE" .
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifact-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            *.tar.gz
+            *.zip
+
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: build-artifact-*
+          merge-multiple: true
+
+      - name: Check Release Notes and Generate Checksums
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          NOTES_FILE="docs/releases/${VERSION}.md"
+
+          if [ ! -f "$NOTES_FILE" ]; then
+            echo "::error::Release notes not found at $NOTES_FILE. Aborting release."
+            exit 1
+          fi
+
+          cd artifacts
+          sha256sum * > SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          NOTES_FILE="docs/releases/${VERSION}.md"
+
+          gh release create $VERSION \
+            artifacts/* \
+            --title "HowlChangeOps $VERSION" \
+            --notes-file $NOTES_FILE

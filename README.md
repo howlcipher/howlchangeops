@@ -47,7 +47,15 @@ Immutable Receipts, Rollback Recovery & Audit Trail
 Proposals dictating actions, logic overrides, or fake approval metrics (like passing `"approved": true`) within the JSON payload are categorically rejected. AI dictates the proposition; HowlFrame owns the authorization machinery.
 
 ## Installation
-Build the HowlChangeOps adapter:
+
+**Standard install**: download a versioned release archive from
+[GitHub Releases](https://github.com/howlcipher/howlchangeops/releases). Each
+platform archive contains the `howlchangeops` binary, a `changeops` alias
+copy, the compiled `howlchangeops.hfbc` policy, and an example config --
+verify it against the published `SHA256SUMS` before use. This is also the
+path the Howl installer's standard profile uses.
+
+**Developer/source build**: build the adapter from a local checkout:
 ```bash
 cd adapter
 go build -o ../howlchangeops
@@ -69,6 +77,14 @@ HowlChangeOps consumes **HowlFrame v0.1.0** entirely via its public CLI interfac
 Configure repositories securely via `config/howlchangeops-config.json` (or `config/changeops-config.json`). Refer to the `.example.json` file for mapping logical repo IDs to physical absolute paths and their bounded actions.
 
 ## CLI Usage
+
+### Version
+```bash
+howlchangeops --version
+```
+Reports HowlChangeOps's own version and the HowlFrame version its compiled
+policy was built against. Works with no configuration present -- this is
+what the Howl installer uses as the post-install health check.
 
 ### Inspect
 ```bash
