@@ -46,3 +46,6 @@ jobs:
 
     - name: Authority bypass tests
       run: bash tests/authority_bypass_test.sh
+
+    - name: Verify SEO Metadata & Artifacts
+      run: python3 scripts/test_seo.py

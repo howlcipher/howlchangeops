@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="HowlChangeOps is the approval, execution-boundary, verification, and rollback component of the Howl ecosystem, enforcing cryptographic human approval and bounded execution using HowlFrame.">
+    <meta name="description" content="HowlChangeOps enforces cryptographic human approval gates, bounded Git execution, and deterministic rollbacks for AI-assisted changes in the Howl ecosystem.">
     <link rel="canonical" href="https://howlcipher.github.io/howlchangeops/">
 
     <!-- Open Graph Metadata -->
@@ -23,6 +23,34 @@
     <meta name="twitter:description" content="Intent is not authority. HowlChangeOps enforces cryptographic approval gates and bounded execution on AI-proposed mutations.">
     <meta name="twitter:image" content="https://howlcipher.github.io/howlchangeops/social-preview.png">
     <meta name="twitter:image:alt" content="HowlChangeOps authority boundary and release workflow preview card">
+
+    <!-- Schema.org SoftwareApplication Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "HowlChangeOps",
+      "headline": "HowlChangeOps | Bounded Authority & Governed AI Change Control",
+      "description": "HowlChangeOps is the approval, execution-boundary, verification, and rollback component of the Howl ecosystem, enforcing cryptographic human approvals and bounded Git mutations.",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Cross-platform",
+      "url": "https://howlcipher.github.io/howlchangeops/",
+      "author": {
+        "@type": "Person",
+        "name": "William Elias",
+        "url": "https://howlcipher.github.io/william_elias/",
+        "sameAs": [
+          "https://github.com/howlcipher",
+          "https://www.linkedin.com/in/howlcipher/"
+        ]
+      },
+      "isPartOf": {
+        "@type": "SoftwareSourceCode",
+        "name": "Howl Ecosystem",
+        "url": "https://howlcipher.github.io/howl/"
+      }
+    }
+    </script>
 
     <title>HowlChangeOps | Bounded Authority for AI-Assisted Change</title>
     <link rel="stylesheet" href="style.css">
@@ -66,20 +94,36 @@
                 <div class="node-card-desc">Engineering control plane with deterministic routing, adversarial falsification, and human gates.</div>
             </a>
 
-            <a href="https://howlcipher.github.io/howlnotes/" class="drawer-node-card">
-                <div class="node-card-top">
-                    <span class="node-card-name">HOWLNOTES</span>
-                    <span class="node-card-role" style="color: var(--color-cyan);">[KNOWLEDGE NOTEBOOK]</span>
-                </div>
-                <div class="node-card-desc">Engineering knowledge notebook &amp; full-stack dogfood consumer proving native persistent storage.</div>
-            </a>
-
             <a href="https://howlcipher.github.io/howlchangeops/" class="drawer-node-card active-hub">
                 <div class="node-card-top">
                     <span class="node-card-name">HOWLCHANGEOPS</span>
                     <span class="node-card-role" style="color: var(--color-red);">[AUTHORITY GATE]</span>
                 </div>
                 <div class="node-card-desc">Approval, execution-boundary, verification, and rollback component enforcing cryptographic human approvals.</div>
+            </a>
+
+            <a href="https://howlcipher.github.io/howlrelay/" class="drawer-node-card">
+                <div class="node-card-top">
+                    <span class="node-card-name">HOWLRELAY</span>
+                    <span class="node-card-role" style="color: var(--color-cyan);">[CONTINUITY &amp; HANDOFF]</span>
+                </div>
+                <div class="node-card-desc">Persistent multi-session state handoffs and memory-bounded context continuations.</div>
+            </a>
+
+            <a href="https://howlcipher.github.io/howlwriter/" class="drawer-node-card">
+                <div class="node-card-top">
+                    <span class="node-card-name">HOWLWRITER</span>
+                    <span class="node-card-role" style="color: var(--color-magenta);">[WRITING CONTROL]</span>
+                </div>
+                <div class="node-card-desc">Writing control system for voice preservation, deterministic style linting, humanization, and review.</div>
+            </a>
+
+            <a href="https://howlcipher.github.io/howlcreate/" class="drawer-node-card">
+                <div class="node-card-top">
+                    <span class="node-card-name">HOWLCREATE</span>
+                    <span class="node-card-role" style="color: var(--color-amber);">[CREATIVE IDEATION]</span>
+                </div>
+                <div class="node-card-desc">Computational creativity harness for iterative narrative exploration and divergence pruning.</div>
             </a>
 
             <a href="https://howlcipher.github.io/howlboard/" class="drawer-node-card">
@@ -90,16 +134,16 @@
                 <div class="node-card-desc">Observation console and full-stack deterministic task state machine application.</div>
             </a>
 
-            <a href="https://howlcipher.github.io/howlwriter/" class="drawer-node-card">
+            <a href="https://howlcipher.github.io/howlnotes/" class="drawer-node-card">
                 <div class="node-card-top">
-                    <span class="node-card-name">HOWLWRITER</span>
-                    <span class="node-card-role" style="color: var(--color-magenta);">[WRITING CONTROL]</span>
+                    <span class="node-card-name">HOWLNOTES</span>
+                    <span class="node-card-role" style="color: var(--color-cyan);">[KNOWLEDGE NOTEBOOK]</span>
                 </div>
-                <div class="node-card-desc">Writing control system for voice preservation, deterministic style linting, humanization, and review.</div>
+                <div class="node-card-desc">Engineering knowledge notebook &amp; full-stack dogfood consumer proving native persistent storage.</div>
             </a>
         </div>
         <div class="drawer-footer">
-            <span>● 6 PRODUCTION NODES</span>
+            <span>● 9 PRODUCTION &amp; APPLICATION NODES</span>
             <span>AUTH // HOWL 2026</span>
         </div>
     </aside>
@@ -136,6 +180,7 @@
                 <a href="#attack-the-boundary">06_ThreatModel</a>
                 <a href="#howlframe-relationship">07_HowlFrame</a>
                 <a href="#security-model">08_SecurityModel</a>
+                <a href="#authority-qa">08B_Authority_FAQ</a>
                 <a href="#references">09_References</a>
             </nav>
         </header>
@@ -153,7 +198,7 @@
                         <p class="hero-kicker">// bounded change authority / verified release control</p>
                         <h1 id="main-title" class="hero-title">HowlChangeOps <span class="jp-sub">チェンジ・オプス // 2026</span></h1>
                         <p class="hero-lead">
-                            HowlChangeOps is the <strong>approval, execution-boundary, verification, and rollback component of the Howl ecosystem</strong>. AI agents reason about release state, but deterministic machinery strictly gates mutation authority behind cryptographic human approval.
+                            HowlChangeOps is the <strong>approval, execution-boundary, verification, and rollback component of the Howl ecosystem</strong>. Engineered by <a href="https://howlcipher.github.io/william_elias/" style="color: var(--color-cyan); text-decoration: underline;">William Elias</a> as the authority gate of the <a href="https://howlcipher.github.io/howl/" style="color: var(--color-cyan); text-decoration: underline;">Howl Autonomous Software Engineering Ecosystem</a>, AI agents reason about release state, but deterministic machinery strictly gates mutation authority behind cryptographic human approval.
                         </p>
                     </div>
 
@@ -501,13 +546,59 @@ release candidate mutation requires trusted human approval signature</code></pre
                 </div>
             </section>
 
+            <!-- 08B Bounded Authority Q&A -->
+            <section id="authority-qa" class="tech-panel">
+                <div class="tech-header">
+                    <h2><span class="sec-id">SECTION // 08B</span> Bounded Authority &amp; Change Control Q&amp;A</h2>
+                    <span class="subsystem-tag">HCO-MOD-FAQ</span>
+                </div>
+                <div class="tech-body">
+                    <p class="section-intro">
+                        Autonomous coding agents cannot be granted unrestricted git push, merge, or deployment authority. HowlChangeOps solves the safety problem through deterministic cryptographic gates and bounded mutation envelopes.
+                    </p>
+
+                    <div class="card-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem;">
+                        <article class="tech-card" style="background: rgba(10, 14, 20, 0.6); border: 1px solid var(--border-color); padding: 1.25rem;">
+                            <h3 style="font-size: 1rem; color: var(--color-red); margin-bottom: 0.5rem;">How can AI-generated code changes be verified and rolled back safely?</h3>
+                            <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-muted);">
+                                HowlChangeOps encapsulates proposed changes into an immutable SHA-256 evidence envelope containing explicit test outputs, branch states, and diff hashes. Every execution phase is strictly paired with an automated post-action verification and a pre-computed deterministic rollback script, ensuring instant reversibility if post-deployment health checks fail.
+                            </p>
+                        </article>
+
+                        <article class="tech-card" style="background: rgba(10, 14, 20, 0.6); border: 1px solid var(--border-color); padding: 1.25rem;">
+                            <h3 style="font-size: 1rem; color: var(--color-cyan); margin-bottom: 0.5rem;">How do cryptographic approval gates prevent prompt-injection attacks?</h3>
+                            <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-muted);">
+                                Prompt injection affects LLM reasoning, not deterministic signature verification. In HowlChangeOps, mutations require an HMAC-SHA256 signature generated by a human keyholder over the exact evidence envelope hash. Even if an agent's reasoning is compromised by untrusted prompt injection, the mutation engine rejects the payload unless signed by authorized human credentials.
+                            </p>
+                        </article>
+
+                        <article class="tech-card" style="background: rgba(10, 14, 20, 0.6); border: 1px solid var(--border-color); padding: 1.25rem;">
+                            <h3 style="font-size: 1rem; color: var(--color-amber); margin-bottom: 0.5rem;">How does HowlChangeOps prevent TOCTOU drift attacks?</h3>
+                            <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-muted);">
+                                Time-of-Check to Time-of-Use (TOCTOU) occurs when repository state changes between evidence collection and execution. HowlChangeOps locks the target commit SHA in the signed envelope. If any commit or tag is pushed to the repository before the mutation runs, the engine detects hash mismatch and immediately halts with <code>STALE_EVIDENCE</code>.
+                            </p>
+                        </article>
+
+                        <article class="tech-card" style="background: rgba(10, 14, 20, 0.6); border: 1px solid var(--border-color); padding: 1.25rem;">
+                            <h3 style="font-size: 1rem; color: var(--color-green); margin-bottom: 0.5rem;">Who engineered HowlChangeOps and how does it fit into the Howl ecosystem?</h3>
+                            <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-muted);">
+                                HowlChangeOps was designed and built by <a href="https://howlcipher.github.io/william_elias/" style="color: var(--color-cyan); text-decoration: underline;">William Elias</a>. It acts as the release authority and human gatekeeper for <a href="https://howlcipher.github.io/howlplane/" style="color: var(--color-blue); text-decoration: underline;">HowlPlane</a>, compiling policy via <a href="https://howlcipher.github.io/howlframe/" style="color: var(--color-magenta); text-decoration: underline;">HowlFrame</a> bytecode to guarantee that autonomous engineering work conforms to human sovereignty.
+                            </p>
+                        </article>
+                    </div>
+                </div>
+            </section>
+
             <!-- 09 References -->
             <section id="references" class="tech-panel">
                 <div class="tech-header">
-                    <h2><span class="sec-id">SECTION // 09</span> Documentation &amp; References</h2>
+                    <h2><span class="sec-id">SECTION // 09</span> Documentation &amp; Authorship</h2>
                     <span class="subsystem-tag">HCO-MOD-DOCS</span>
                 </div>
                 <div class="tech-body">
+                    <p style="margin-bottom: 1rem;">
+                        HowlChangeOps is designed and maintained by <strong><a href="https://howlcipher.github.io/william_elias/" style="color: var(--color-cyan); text-decoration: underline;">William Elias</a></strong> as the release controller for the <strong><a href="https://howlcipher.github.io/howl/" style="color: var(--color-cyan); text-decoration: underline;">Howl Ecosystem</a></strong>.
+                    </p>
                     <ul>
                         <li><a href="https://github.com/howlcipher/howlchangeops/blob/main/README.md" target="_blank" rel="noreferrer">README and Quick Start</a></li>
                         <li><a href="authority_boundary_report.md">Authority Boundary Report</a></li>
@@ -526,17 +617,20 @@ release candidate mutation requires trusted human approval signature</code></pre
                     <span class="status-dot" aria-hidden="true"></span>
                     <span>SYS_STATUS: ACTIVE // HOWLCHANGEOPS-RELEASE-CONTROLLER</span>
                 </div>
-                <div>AUTH // HOWL ECOSYSTEM 2026</div>
+                <div>AUTH // <a href="https://howlcipher.github.io/william_elias/" style="color: var(--text-muted); text-decoration: underline;">WILLIAM ELIAS</a> &bull; HOWL ECOSYSTEM 2026</div>
             </div>
             <div class="footer-links">
                 <nav class="footer-nav" aria-label="Ecosystem Links">
+                    <a href="https://howlcipher.github.io/william_elias/">William Elias</a>
                     <a href="https://howlcipher.github.io/howl/">Howl Hub</a>
                     <a href="https://howlcipher.github.io/howlframe/">HowlFrame</a>
                     <a href="https://howlcipher.github.io/howlplane/">HowlPlane</a>
-                    <a href="https://howlcipher.github.io/howlnotes/">HowlNotes</a>
                     <a href="https://howlcipher.github.io/howlchangeops/">HowlChangeOps</a>
-                    <a href="https://howlcipher.github.io/howlboard/">HowlBoard</a>
+                    <a href="https://howlcipher.github.io/howlrelay/">HowlRelay</a>
                     <a href="https://howlcipher.github.io/howlwriter/">HowlWriter</a>
+                    <a href="https://howlcipher.github.io/howlcreate/">HowlCreate</a>
+                    <a href="https://howlcipher.github.io/howlboard/">HowlBoard</a>
+                    <a href="https://howlcipher.github.io/howlnotes/">HowlNotes</a>
                 </nav>
                 <a href="#main-content">[ BACK TO TOP ]</a>
             </div>
