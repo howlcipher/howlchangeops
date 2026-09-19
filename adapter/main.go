@@ -18,9 +18,41 @@ const Version = "0.1.0"
 
 // CompatibleHowlFrameVersion is the HowlFrame release this build's
 // compiled policy (howlchangeops.hfbc) was built and verified against.
-// HowlChangeOps consumes HowlFrame entirely through its public CLI, so
-// this is a documented compatibility pin, not an enforced runtime check.
+// HowlChangeOps consumes HowlFrame entirely through its public CLI, and
+// strictly enforces this version compatibility pin at startup and execution pre-flight (HOWL-CANON-013).
 const CompatibleHowlFrameVersion = "0.1.0"
+
+func getHowlFrameBin() string {
+	if bin := os.Getenv("HOWLFRAME_BIN"); bin != "" {
+		return bin
+	}
+	return "howlframe"
+}
+
+func checkHowlFrameCompatibility() error {
+	bin := getHowlFrameBin()
+	cmd := exec.Command(bin, "--version")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("howlframe binary %q not found or failed to execute: %w (output: %s)", bin, err, strings.TrimSpace(string(out)))
+	}
+	outputStr := string(out)
+	lines := strings.Split(strings.TrimSpace(outputStr), "\n")
+	if len(lines) == 0 {
+		return fmt.Errorf("empty output from %s --version", bin)
+	}
+	firstLine := strings.TrimSpace(lines[0])
+	fields := strings.Fields(firstLine)
+	if len(fields) < 2 || fields[0] != "HowlFrame" {
+		return fmt.Errorf("unrecognized howlframe version format: %q", firstLine)
+	}
+	version := strings.TrimPrefix(fields[1], "v")
+	expected := strings.TrimPrefix(CompatibleHowlFrameVersion, "v")
+	if version != expected {
+		return fmt.Errorf("incompatible HowlFrame version: found %s, require %s", version, expected)
+	}
+	return nil
+}
 
 type ConfigRepo struct {
 	Path              string   `json:"path"`
@@ -478,6 +510,9 @@ func validate(repoID string, repoPath string, repoCfg ConfigRepo, configDigest s
 }
 
 func invokeHowlFrame(proposalFile string, ev EvidenceEnvelope, rtEv RuntimeEvidence, repoCfg ConfigRepo) (map[string]interface{}, error) {
+	if err := checkHowlFrameCompatibility(); err != nil {
+		return nil, fmt.Errorf("howlframe runtime compatibility check failed: %w", err)
+	}
 	policyArtifact := "howlchangeops.hfbc"
 	if _, err := os.Stat(policyArtifact); err != nil {
 		policyArtifact = "changeops.hfbc"
@@ -516,7 +551,7 @@ func invokeHowlFrame(proposalFile string, ev EvidenceEnvelope, rtEv RuntimeEvide
 	args = append(args, fmt.Sprintf("local_remote_match=%t", ev.Remote.LocalRemoteMatch))
 	args = append(args, fmt.Sprintf("ci_status=%s", ev.Remote.CIStatus))
 
-	cmd := exec.Command("howlframe", args...)
+	cmd := exec.Command(getHowlFrameBin(), args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("howlframe error: %v, out: %s", err, string(out))
@@ -566,6 +601,15 @@ func main() {
 	}
 
 	cmd := os.Args[1]
+
+	// Startup pre-flight check for commands that execute or evaluate HowlFrame policy (HOWL-CANON-013)
+	switch cmd {
+	case "plan", "dogfood", "evaluate", "execute":
+		if err := checkHowlFrameCompatibility(); err != nil {
+			fmt.Fprintf(os.Stderr, "HOWLFRAME_INCOMPATIBLE: %v\n", err)
+			os.Exit(1)
+		}
+	}
 
 	switch cmd {
 	case "inspect":
