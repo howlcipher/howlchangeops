@@ -25,9 +25,10 @@ jobs:
         chmod +x ~/.local/bin/howlframe
         echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-    - name: Build adapter
+    - name: Test and build adapter
       run: |
         cd adapter
+        go test -v ./...
         go build -o ../howlchangeops
         cd ..
         ln -sf howlchangeops changeops
