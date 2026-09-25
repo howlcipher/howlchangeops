@@ -6,3 +6,10 @@
 /.howlchangeops/
 config/changeops-config.json
 config/howlchangeops-config.json
+
+# Build and test artifacts
+adapter/changeops
+tests/prop*.json
+tests/testrepo/
+tests/testrepo2/
+
