@@ -102,11 +102,43 @@ Gathers current evidence, git branch, tag state, and working tree clean/dirty st
 ```bash
 howlchangeops validate <repo_id>
 ```
-The supported `validation_profile` is `go`, which runs `go test ./...` and
-`go build ./...` and caches the results. Unsupported or empty profiles fail
-with a nonzero exit and an actionable configuration error before gathering
-validation evidence. They do not print completion or create fresh evidence.
-The `dogfood` workflow stops on the same failure before proposing an action.
+Supported `validation_profile` values are `go` and explicit `python-stdlib`.
+Go retains its existing `go test ./...` and `go build ./...` contract.
+Plain `python`, empty, and unknown profiles fail with an actionable configuration
+error before creating evidence.
+
+Validation requires a clean configured Git repository with a committed HEAD.
+Commit or restore changes before validating. Missing paths, repositories without
+a commit, nonrepositories, and dirty working trees fail actionably. Both profiles
+recheck HEAD and the working tree after checks. If checks change the repository,
+actual results are saved with a failed working-tree check and validation exits
+nonzero. Cached results from a dirty or changed validation cannot be reused
+after the working tree is restored. These checks bound cache reuse; they do not
+make trusted repository code an immutable or isolated snapshot.
+
+`python-stdlib` requires Python 3 and Git on PATH and executes trusted repository
+tests; it is not a security sandbox, dependency audit, or approval. Fixed
+`python3 -I -B -c` helpers use no shell or configurable commands. The test helper
+preimports standard-library unittest, adds the repository import path, discovers
+`tests/test*.py` (including a nonpackage tests directory), requires a positive
+suite count, and runs the suite; a suite where every test is skipped is rejected.
+Only `test*.py` files directly in `tests/` and in importable packages
+(directories with `__init__.py`) are discovered. The build helper separately compiles working-tree
+bytes for Git-tracked `.py` paths in memory without executing source or writing
+bytecode. Missing sources, symlink components, nonregular sources, syntax errors,
+missing/empty tests, and failing tests reject validation.
+
+Each Python check has a 120-second deadline and a 1 MiB combined stdout/stderr
+capture cap. Timeout or excess output fails the check; evidence adds
+`timed_out` and `output_truncated` when true. `output_digest` is SHA-256 of
+the captured bytes, including only the retained prefix on overflow; concurrent
+stdout/stderr ordering can vary. POSIX cancellation kills the process group,
+including children retaining output pipes. Descendants that deliberately escape
+the group are outside this boundary. Windows rejects this profile because
+equivalent descendant cancellation is not implemented. Both test and build
+results are persisted even on failure; failed Python validation exits nonzero
+without a completion message or dogfood proposal continuation. The unchanged
+policy still requires both checks and independently governs approval.
 
 ### Plan
 ```bash
