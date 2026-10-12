@@ -63,12 +63,18 @@ cd ..
 ln -sf howlchangeops changeops # optional compatibility alias
 ```
 
-Compile the authoritative policy layer:
+Compile the authoritative policy layer beside the built executable:
 ```bash
 howlframe check src/howlchangeops.howl
 howlframe build src/howlchangeops.howl
 ln -sf howlchangeops.hfbc changeops.hfbc
 ```
+
+Policy evaluation resolves the executable through symlinks and loads
+`howlchangeops.hfbc` beside that executable, with `changeops.hfbc` as a
+legacy sidecar fallback. Keep the binary and policy together when installing
+or moving a source build. A policy in the caller's working directory cannot
+replace the installed sidecar. Missing installed policy fails evaluation.
 
 ## HowlFrame dependency
 HowlChangeOps consumes **HowlFrame v0.1.0** entirely via its public CLI interface. It is independent of HowlFrame's source code, serving as real-world dogfooding for the platform's release candidates. See the dogfooding report in `docs/howlframe_dogfooding_report.md` for findings.
@@ -96,7 +102,11 @@ Gathers current evidence, git branch, tag state, and working tree clean/dirty st
 ```bash
 howlchangeops validate <repo_id>
 ```
-Executes the predefined validation profile bounded by configuration limits (e.g. `go test ./...` and `go build ./...`) and caches the state.
+The supported `validation_profile` is `go`, which runs `go test ./...` and
+`go build ./...` and caches the results. Unsupported or empty profiles fail
+with a nonzero exit and an actionable configuration error before gathering
+validation evidence. They do not print completion or create fresh evidence.
+The `dogfood` workflow stops on the same failure before proposing an action.
 
 ### Plan
 ```bash

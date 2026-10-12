@@ -474,7 +474,10 @@ func runValidationCommand(name string, repoPath string, cmdName string, args ...
 	}
 }
 
-func validate(repoID string, repoPath string, repoCfg ConfigRepo, configDigest string) {
+func validate(repoID string, repoPath string, repoCfg ConfigRepo, configDigest string) error {
+	if repoCfg.ValidationProfile != "go" {
+		return fmt.Errorf("unsupported validation profile %q: supported profile is go; configure validation_profile in config/howlchangeops-config.json", repoCfg.ValidationProfile)
+	}
 	ev, _ := gatherEvidence(repoID, repoPath, repoCfg, configDigest)
 	ev.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
 	ev.Checks = make(map[string]ValidationResult)
@@ -485,8 +488,6 @@ func validate(repoID string, repoPath string, repoCfg ConfigRepo, configDigest s
 
 		fmt.Println("Running go build ./...")
 		ev.Checks["build"] = runValidationCommand("go_build", repoPath, "go", "build", "./...")
-	} else {
-		fmt.Printf("Unknown profile: %s\n", repoCfg.ValidationProfile)
 	}
 
 	wtStatus := "FAIL"
@@ -501,21 +502,57 @@ func validate(repoID string, repoPath string, repoCfg ConfigRepo, configDigest s
 		ExitCode:   0,
 	}
 
-	os.MkdirAll(baseDir, 0755)
+	if err := os.MkdirAll(baseDir, 0755); err != nil {
+		return fmt.Errorf("create evidence directory: %w", err)
+	}
 	cacheKey := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s", repoID, ev.Revision, repoCfg.ValidationProfile, configDigest))))
 	cacheFile := filepath.Join(baseDir, fmt.Sprintf("evidence_%s.json", cacheKey))
-	cacheData, _ := json.MarshalIndent(ev, "", "  ")
-	os.WriteFile(cacheFile, cacheData, 0644)
+	cacheData, err := json.MarshalIndent(ev, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode validation evidence: %w", err)
+	}
+	if err := os.WriteFile(cacheFile, cacheData, 0644); err != nil {
+		return fmt.Errorf("write validation evidence: %w", err)
+	}
 	fmt.Printf("Validation complete. evidence_digest=%s\n", computeEvidenceDigest(ev))
+	return nil
+}
+
+// Policy travels with the executable, including source builds. Never let the
+// caller's working directory select the authority policy.
+func resolvePolicyArtifact() (string, error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("locate executable: %w", err)
+	}
+	executable, err = filepath.EvalSymlinks(executable)
+	if err != nil {
+		return "", fmt.Errorf("resolve executable: %w", err)
+	}
+	directory := filepath.Dir(executable)
+	for _, name := range []string{"howlchangeops.hfbc", "changeops.hfbc"} {
+		artifact := filepath.Join(directory, name)
+		info, err := os.Stat(artifact)
+		if err == nil {
+			if !info.Mode().IsRegular() {
+				return "", fmt.Errorf("policy artifact %q is not a regular file", artifact)
+			}
+			return artifact, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("inspect policy artifact %q: %w", artifact, err)
+		}
+	}
+	return "", fmt.Errorf("policy artifact missing beside executable in %q: install howlchangeops.hfbc alongside howlchangeops", directory)
 }
 
 func invokeHowlFrame(proposalFile string, ev EvidenceEnvelope, rtEv RuntimeEvidence, repoCfg ConfigRepo) (map[string]interface{}, error) {
 	if err := checkHowlFrameCompatibility(); err != nil {
 		return nil, fmt.Errorf("howlframe runtime compatibility check failed: %w", err)
 	}
-	policyArtifact := "howlchangeops.hfbc"
-	if _, err := os.Stat(policyArtifact); err != nil {
-		policyArtifact = "changeops.hfbc"
+	policyArtifact, err := resolvePolicyArtifact()
+	if err != nil {
+		return nil, err
 	}
 	args := []string{"run", "-allow-caps", "filesystem", policyArtifact, proposalFile}
 	args = append(args, fmt.Sprintf("repo=%s", ev.Repo))
@@ -650,7 +687,10 @@ func main() {
 			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", repoID)
 			os.Exit(1)
 		}
-		validate(repoID, repoCfg.Path, repoCfg, configDigest)
+		if err := validate(repoID, repoCfg.Path, repoCfg, configDigest); err != nil {
+			fmt.Fprintf(os.Stderr, "VALIDATION_FAILED: %v\n", err)
+			os.Exit(1)
+		}
 
 	case "plan":
 		if len(os.Args) < 3 {
@@ -726,7 +766,10 @@ func main() {
 
 		fmt.Printf("1. Identifying trusted repo: %s (%s)\n", repoID, repoCfg.Path)
 		fmt.Println("2. Gathering evidence and running validation profile...")
-		validate(repoID, repoCfg.Path, repoCfg, configDigest)
+		if err := validate(repoID, repoCfg.Path, repoCfg, configDigest); err != nil {
+			fmt.Fprintf(os.Stderr, "VALIDATION_FAILED: %v\n", err)
+			os.Exit(1)
+		}
 
 		ev, rtEv := gatherEvidence(repoID, repoCfg.Path, repoCfg, configDigest)
 
