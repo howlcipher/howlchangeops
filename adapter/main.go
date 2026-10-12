@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -73,14 +74,16 @@ type Proposal struct {
 }
 
 type ValidationResult struct {
-	Name         string `json:"name"`
-	Status       string `json:"status"`
-	StartedAt    string `json:"started_at"`
-	FinishedAt   string `json:"finished_at"`
-	ExitCode     int    `json:"exit_code"`
-	Profile      string `json:"profile"`
-	Revision     string `json:"revision"`
-	OutputDigest string `json:"output_digest"`
+	Name            string `json:"name"`
+	Status          string `json:"status"`
+	StartedAt       string `json:"started_at"`
+	FinishedAt      string `json:"finished_at"`
+	ExitCode        int    `json:"exit_code"`
+	Profile         string `json:"profile"`
+	Revision        string `json:"revision"`
+	OutputDigest    string `json:"output_digest"`
+	TimedOut        bool   `json:"timed_out,omitempty"`
+	OutputTruncated bool   `json:"output_truncated,omitempty"`
 }
 
 type RiskEvidence struct {
@@ -411,7 +414,7 @@ func gatherEvidence(repoID string, repoPath string, repoCfg ConfigRepo, configDi
 	if cacheData, err := os.ReadFile(cacheFile); err == nil {
 		var cachedEv EvidenceEnvelope
 		if json.Unmarshal(cacheData, &cachedEv) == nil {
-			if cachedEv.Revision == rev && cachedEv.ConfigDigest == configDigest && cachedEv.ValidationProfile == repoCfg.ValidationProfile {
+			if cachedEv.Revision == rev && cachedEv.ConfigDigest == configDigest && cachedEv.ValidationProfile == repoCfg.ValidationProfile && cachedEv.WorkingTree == "clean" && cachedEv.Checks["working_tree"].Status == "PASS" {
 				ev = cachedEv
 				ev.WorkingTree = workingTree // Update working tree
 			}
@@ -475,10 +478,24 @@ func runValidationCommand(name string, repoPath string, cmdName string, args ...
 }
 
 func validate(repoID string, repoPath string, repoCfg ConfigRepo, configDigest string) error {
-	if repoCfg.ValidationProfile != "go" {
-		return fmt.Errorf("unsupported validation profile %q: supported profile is go; configure validation_profile in config/howlchangeops-config.json", repoCfg.ValidationProfile)
+	if repoCfg.ValidationProfile != "go" && repoCfg.ValidationProfile != "python-stdlib" {
+		return fmt.Errorf("unsupported validation profile %q: supported profiles are go and python-stdlib; configure validation_profile in config/howlchangeops-config.json", repoCfg.ValidationProfile)
+	}
+	if repoCfg.ValidationProfile == "python-stdlib" && runtime.GOOS == "windows" {
+		return fmt.Errorf("python-stdlib is unsupported on Windows: process-group cancellation is unavailable")
+	}
+	revision, err := gitCommand(repoPath, "rev-parse", "--verify", "HEAD")
+	if err != nil || len(revision) < 7 {
+		return fmt.Errorf("validation requires a Git repository with a committed HEAD; check the configured repository path and create an initial commit")
+	}
+	status, err := gitCommand(repoPath, "status", "--porcelain")
+	if err != nil || status != "" {
+		return fmt.Errorf("validation requires a clean working tree; commit or restore repository changes before validating")
 	}
 	ev, _ := gatherEvidence(repoID, repoPath, repoCfg, configDigest)
+	if ev.Revision != revision || ev.WorkingTree != "clean" {
+		return fmt.Errorf("repository changed before validation; retry with a clean committed HEAD")
+	}
 	ev.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
 	ev.Checks = make(map[string]ValidationResult)
 
@@ -490,9 +507,22 @@ func validate(repoID string, repoPath string, repoCfg ConfigRepo, configDigest s
 		ev.Checks["build"] = runValidationCommand("go_build", repoPath, "go", "build", "./...")
 	}
 
-	wtStatus := "FAIL"
-	if ev.WorkingTree == "clean" {
-		wtStatus = "PASS"
+	if repoCfg.ValidationProfile == "python-stdlib" {
+		ev.Checks["test"] = runPythonCheck("python_unittest", repoPath, pythonTestHelper, 120*time.Second, 1024*1024)
+		ev.Checks["build"] = runPythonCheck("python_compile", repoPath, pythonBuildHelper, 120*time.Second, 1024*1024)
+	}
+
+	// Passing checks are reusable only for the same clean committed snapshot.
+	finalRevision, revisionErr := gitCommand(repoPath, "rev-parse", "--verify", "HEAD")
+	finalStatus, statusErr := gitCommand(repoPath, "status", "--porcelain")
+	snapshotChanged := revisionErr != nil || statusErr != nil || finalRevision != revision || finalStatus != ""
+	ev.WorkingTree = "clean"
+	if statusErr != nil || finalStatus != "" {
+		ev.WorkingTree = "dirty"
+	}
+	wtStatus := "PASS"
+	if snapshotChanged {
+		wtStatus = "FAIL"
 	}
 	ev.Checks["working_tree"] = ValidationResult{
 		Name:       "working_tree",
@@ -513,6 +543,12 @@ func validate(repoID string, repoPath string, repoCfg ConfigRepo, configDigest s
 	}
 	if err := os.WriteFile(cacheFile, cacheData, 0644); err != nil {
 		return fmt.Errorf("write validation evidence: %w", err)
+	}
+	if snapshotChanged {
+		return fmt.Errorf("repository changed during validation; checks cannot be bound to the committed HEAD; restore or commit changes and validate again")
+	}
+	if repoCfg.ValidationProfile == "python-stdlib" && (ev.Checks["test"].Status != "PASS" || ev.Checks["build"].Status != "PASS") {
+		return fmt.Errorf("python-stdlib validation failed: test=%s build=%s; evidence_digest=%s", ev.Checks["test"].Status, ev.Checks["build"].Status, computeEvidenceDigest(ev))
 	}
 	fmt.Printf("Validation complete. evidence_digest=%s\n", computeEvidenceDigest(ev))
 	return nil
