@@ -1,0 +1,48 @@
+name: HOWL bounded native release verification
+on:
+  push:
+    branches: [verify/howl-e2e-ux001-release-native]
+permissions:
+  contents: read
+env:
+  HOWL_FORBID_LOCAL_INFERENCE: '1'
+jobs:
+  native:
+    name: Native ${{ matrix.os }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, os: linux, arch: amd64}
+          - {runner: ubuntu-24.04-arm, os: linux, arch: arm64}
+          - {runner: macos-15-intel, os: darwin, arch: amd64}
+          - {runner: macos-14, os: darwin, arch: arm64}
+          - {runner: windows-2022, os: windows, arch: amd64}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.0'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run packaged binaries and policy on the native host
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python verification/native_release_check.py --os '${{ matrix.os }}' --arch '${{ matrix.arch }}' --out native-output
+      - name: Preserve measured results including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-result-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            native-output/verification.json
+            native-output/commands.json
+            native-output/invalid-validation-evidence.json
+            native-output/*go-observations.jsonl
+            native-output/*.log
+          if-no-files-found: error
+          retention-days: 14

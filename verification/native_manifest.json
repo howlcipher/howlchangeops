@@ -1,0 +1,67 @@
+{
+  "source_sha": "e039fb444cf4bc8f0ff921366d296d583ace9786",
+  "compiler_source_sha": "71a33ec4467eb7615ad24fbc3362b2cd06f758cb",
+  "version": "v0.1.0",
+  "platforms": {
+    "linux-amd64": {
+      "archive": "howlchangeops_v0.1.0_linux_amd64.tar.gz",
+      "sha256": "9965df6d1dc2ab7e2904ec25ff9c3537916af59e5f135591c53f159301190899",
+      "files": {
+        "changeops": "b0e86f6982cc2a3d2fa1d76e1f1ed169e27bd2b1756d94b04836037c1d1e3425",
+        "howlchangeops": "b0e86f6982cc2a3d2fa1d76e1f1ed169e27bd2b1756d94b04836037c1d1e3425",
+        "howlchangeops-config.example.json": "d8e6f4e0dbc4fa896a0eb5316d847afb014207985941292ce8014862102cec34",
+        "howlchangeops.hfbc": "ee6a0f8d7f76fe2d06401b303aa47bc0199782cce49a47f6f3ee300b83197f22"
+      },
+      "frame_archive": "howlframe_v0.1.0_linux_amd64.tar.gz",
+      "frame_sha256": "d44006c23cb9c152c815b5acc8762a53f06a93777877b86bfea57d173cc9d907"
+    },
+    "linux-arm64": {
+      "archive": "howlchangeops_v0.1.0_linux_arm64.tar.gz",
+      "sha256": "9ff6678e19260c62e70a47e9523b2d3d537129b184ab85df3876d940375ae82d",
+      "files": {
+        "changeops": "2ed9009a1d846a17a00bb02ac835cbcbbb088bfcb84161126776ac4bae36ec20",
+        "howlchangeops": "2ed9009a1d846a17a00bb02ac835cbcbbb088bfcb84161126776ac4bae36ec20",
+        "howlchangeops-config.example.json": "d8e6f4e0dbc4fa896a0eb5316d847afb014207985941292ce8014862102cec34",
+        "howlchangeops.hfbc": "ee6a0f8d7f76fe2d06401b303aa47bc0199782cce49a47f6f3ee300b83197f22"
+      },
+      "frame_archive": "howlframe_v0.1.0_linux_arm64.tar.gz",
+      "frame_sha256": "7398938d536ccb228c07ee267af7ad0ce40eb5f8509d1dd04b27883b4ea41f56"
+    },
+    "darwin-amd64": {
+      "archive": "howlchangeops_v0.1.0_darwin_amd64.tar.gz",
+      "sha256": "9b552a8eba176ae08d73af738d888c319e301c7f127bfb0fe95c2fda5f5944db",
+      "files": {
+        "changeops": "155b0e6b8866b6adaeff39063c49606efb78a7bf15651c0400e238abbfa301b6",
+        "howlchangeops": "155b0e6b8866b6adaeff39063c49606efb78a7bf15651c0400e238abbfa301b6",
+        "howlchangeops-config.example.json": "d8e6f4e0dbc4fa896a0eb5316d847afb014207985941292ce8014862102cec34",
+        "howlchangeops.hfbc": "ee6a0f8d7f76fe2d06401b303aa47bc0199782cce49a47f6f3ee300b83197f22"
+      },
+      "frame_archive": "howlframe_v0.1.0_darwin_amd64.tar.gz",
+      "frame_sha256": "8236fff18dc90fdc9fd81943e9cd7c2dd0313cf0ddf2a621dae53b6d65d9e44e"
+    },
+    "darwin-arm64": {
+      "archive": "howlchangeops_v0.1.0_darwin_arm64.tar.gz",
+      "sha256": "a9a2a4f7901bb9bac658bf5bf6a46393c2b110cba07f3c3d2bfa9a57dea15e83",
+      "files": {
+        "changeops": "cb454c3f84399540adc809cf35c2150ea590e538a6408c55cb56e030d1b5af5c",
+        "howlchangeops": "cb454c3f84399540adc809cf35c2150ea590e538a6408c55cb56e030d1b5af5c",
+        "howlchangeops-config.example.json": "d8e6f4e0dbc4fa896a0eb5316d847afb014207985941292ce8014862102cec34",
+        "howlchangeops.hfbc": "ee6a0f8d7f76fe2d06401b303aa47bc0199782cce49a47f6f3ee300b83197f22"
+      },
+      "frame_archive": "howlframe_v0.1.0_darwin_arm64.tar.gz",
+      "frame_sha256": "b4580503f680cee91bf3a7c73d04ade642076b75470dacc7fcbeaa4324c4135e"
+    },
+    "windows-amd64": {
+      "archive": "howlchangeops_v0.1.0_windows_amd64.zip",
+      "sha256": "3de33b3fc94112a5f0ce0342a8b97e4feb0ae0aa62de85c77ee3d03d804b2237",
+      "files": {
+        "changeops.exe": "d9ac62028f16fabed59be14f7914dc15ee52d2ef8b4117325ba0e92f76c5b44f",
+        "howlchangeops-config.example.json": "d8e6f4e0dbc4fa896a0eb5316d847afb014207985941292ce8014862102cec34",
+        "howlchangeops.exe": "d9ac62028f16fabed59be14f7914dc15ee52d2ef8b4117325ba0e92f76c5b44f",
+        "howlchangeops.hfbc": "ee6a0f8d7f76fe2d06401b303aa47bc0199782cce49a47f6f3ee300b83197f22"
+      },
+      "frame_archive": "howlframe_v0.1.0_windows_amd64.zip",
+      "frame_sha256": "4419abf6b87c788b9845457464ab56108af227f49e605cdac086ccce9b1f00c6"
+    }
+  }
+}
