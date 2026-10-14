@@ -113,9 +113,15 @@ def header_arch(binary):
 
 hardware = {'process_arch': actual_arch}
 if args.os == 'darwin':
-    silicon = command(['sysctl', '-n', 'hw.optional.arm64']).stdout.strip()
-    assert silicon == ('1' if args.arch == 'arm64' else '0'), silicon
-    hardware['apple_silicon'] = silicon == '1'
+    if args.arch == 'arm64':
+        silicon = command(['sysctl', '-n', 'hw.optional.arm64']).stdout.strip()
+        assert silicon == '1', silicon
+        hardware['apple_silicon'] = True
+    else:
+        # Intel macOS does not define the ARM capability sysctl key.
+        brand = command(['sysctl', '-n', 'machdep.cpu.brand_string']).stdout.strip()
+        assert 'Intel' in brand and 'Apple' not in brand, brand
+        hardware['intel_cpu_brand'] = brand
 if args.os == 'windows':
     import ctypes
     from ctypes import wintypes
