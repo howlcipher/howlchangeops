@@ -84,7 +84,8 @@ def extract(archive, target, expected_hash, expected_files=None):
         assert found == set(expected_files)
 
 
-package = download('howlcipher/howlchangeops', contract['archive'], out / 'package-download')
+package = Path(__file__).with_name('packages') / contract['archive']
+assert package.is_file(), package
 frame_package = download('howlcipher/howlframe', contract['frame_archive'], out / 'frame-download')
 # Download credentials must never reach package execution or fixture subprocesses.
 for key in list(os.environ):

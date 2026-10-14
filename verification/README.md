@@ -1,7 +1,10 @@
 # Bounded release-package verification
 
 This temporary branch verifies the exact reviewed HowlChangeOpsv0.1.0 archives
-from sourcee039fb4 against the pinned official Framev0.1.0 binaries. It does not
+from sourcee039fb4 against the pinned official Framev0.1.0 binaries.
+The read-only CI token cannot see draft assets; this branch carries the exact
+reviewed archive bytes as verification inputs. Hashes remain identical to the
+draft release assets. Default source and release publication remain unchanged. It does not
 change product sources, the default branch, campaign counters or policy authority.
 Do not merge this verification harness as an engineering delivery.
 
