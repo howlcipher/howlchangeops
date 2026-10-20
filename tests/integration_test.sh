@@ -226,4 +226,34 @@ echo "=== Scenario 12 - Compatibility Alias (changeops CLI command) ==="
 ALIAS_OUT=$(changeops plan testrepo)
 echo "$ALIAS_OUT" | grep -q "create_release_candidate" && echo "PASS: Compatibility alias changeops executes plan successfully"
 
+echo "=== Scenario 13 - JSON result envelopes (howl.result/v1) ==="
+jfield() { python3 -c 'import json,sys; d=json.load(sys.stdin); print(eval("d"+sys.argv[1]))' "$1"; }
+expect() { if [ "$1" = "$2" ]; then echo "PASS: $3"; else echo "FAIL: $3 (got '$1', want '$2')"; exit 1; fi; }
+cd "$TEMP_REPO" && git commit --allow-empty -m "clean for json scenario" && cd - > /dev/null
+howlchangeops validate testrepo
+EVAL_JSON=$(howlchangeops evaluate --json tests/proposal_1.json)
+expect "$(echo "$EVAL_JSON" | jfield '["status"]')" "awaiting_human" "evaluate --json reports awaiting_human"
+JSON_DEC_ID=$(echo "$EVAL_JSON" | jfield '["data"]["decision_id"]')
+expect "$(echo "$EVAL_JSON" | jfield '["data"]["verdict"]')" "REQUIRE_APPROVAL" "evaluate --json carries the verdict"
+expect "$([ -f "$HOWLCHANGEOPS_BASE/decisions/${JSON_DEC_ID}.json" ] && echo yes)" "yes" "evaluate --json decision_id names the saved decision"
+APPROVE_JSON=$(howlchangeops approve "$JSON_DEC_ID" --json)
+expect "$(echo "$APPROVE_JSON" | jfield '["status"]')" "ok" "approve --json ok"
+EXEC_JSON=$(howlchangeops execute --json "$JSON_DEC_ID")
+expect "$(echo "$EXEC_JSON" | jfield '["data"]["verification"]')" "PASS" "execute --json reports verification"
+REPLAY_JSON=$(howlchangeops execute --json "$JSON_DEC_ID" || true)
+expect "$(echo "$REPLAY_JSON" | jfield '["error"]["code"]')" "ALREADY_EXECUTED" "replay is denied with ALREADY_EXECUTED"
+echo "dirty" >> "$TEMP_REPO/file.txt"
+DENY_JSON=$(howlchangeops evaluate --json tests/proposal_1.json)
+expect "$(echo "$DENY_JSON" | jfield '["status"]')" "denied" "evaluate --json reports denied"
+cd "$TEMP_REPO" && git checkout -- file.txt && cd - > /dev/null
+expect "$(howlchangeops interop --json | jfield '["component"]')" "howlchangeops" "interop descriptor"
+
+echo "=== Scenario 14 - Configuration from XDG_CONFIG_HOME, any working directory ==="
+XDG_TMP=$(mktemp -d)
+mkdir -p "$XDG_TMP/howlchangeops"
+cp config/howlchangeops-config.json "$XDG_TMP/howlchangeops/howlchangeops-config.json"
+XDG_OUT=$(cd "$XDG_TMP" && XDG_CONFIG_HOME="$XDG_TMP" howlchangeops plan testrepo)
+expect "$(echo "$XDG_OUT" | grep -q "create_release_candidate" && echo yes)" "yes" "plan runs from another directory with the XDG config"
+rm -rf "$XDG_TMP"
+
 echo "ALL INTEGRATION TESTS PASSED"
