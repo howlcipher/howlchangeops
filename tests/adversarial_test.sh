@@ -55,7 +55,7 @@ EOF
 
 howlchangeops validate testrepo
 DECISION_ID=$(howlchangeops evaluate tests/proposal_adv.json | grep "Decision saved as" | awk '{print $4}' | tr -d '.')
-howlchangeops approve "$DECISION_ID"
+howlchangeops approve "$DECISION_ID" --owner-confirmed
 
 APPROVAL_FILE="$HOWLCHANGEOPS_BASE/approvals/${DECISION_ID}.json"
 

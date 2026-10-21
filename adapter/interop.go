@@ -162,7 +162,7 @@ var interopCommands = []interopCommand{
 	{Path: []string{"plan"}, Flags: []string{}},
 	{Path: []string{"dogfood"}, Flags: []string{}},
 	{Path: []string{"evaluate"}, Flags: []string{"--json"}, JSON: true, Emits: []string{resultSchema}, Accepts: []string{"howlchangeops.proposal/v1"}},
-	{Path: []string{"approve"}, Flags: []string{"--json"}, JSON: true, Emits: []string{resultSchema, "howlchangeops.approval/v1"}},
+	{Path: []string{"approve"}, Flags: []string{"--json", "--owner-confirmed", "--approver"}, JSON: true, Emits: []string{resultSchema, "howlchangeops.approval/v1"}},
 	{Path: []string{"execute"}, Flags: []string{"--json"}, JSON: true, Emits: []string{resultSchema, "howlchangeops.execution_receipt/v1"}},
 	{Path: []string{"rollback"}, Flags: []string{"--json"}, JSON: true, Emits: []string{resultSchema}},
 	{Path: []string{"history"}, Flags: []string{"--json"}, JSON: true, Emits: []string{resultSchema}},
