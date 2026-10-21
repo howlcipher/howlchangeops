@@ -41,3 +41,17 @@ func TestConfirmationIsSigned(t *testing.T) {
 		t.Fatal("changing how an approval was confirmed must invalidate its signature")
 	}
 }
+
+func TestAuthorizationGuaranteeIsSigned(t *testing.T) {
+	key := []byte("synthetic-fixture-key")
+	a := Approval{AuthorizationGuarantee: "cooperative_confirmation_only", DecisionID: "synthetic"}
+	b := a
+	b.AuthorizationGuarantee = "independently_authenticated"
+	if signApproval(a, key) == signApproval(b, key) {
+		t.Fatal("changing authorization guarantee must invalidate signature")
+	}
+	b.AuthorizationGuarantee = ""
+	if signApproval(a, key) == signApproval(b, key) {
+		t.Fatal("removing authorization guarantee must invalidate signature")
+	}
+}
