@@ -112,7 +112,7 @@ EOF
 howlchangeops evaluate tests/proposal_3.json | grep -q "REQUIRE_APPROVAL" && echo "PASS: Self approval ignored, still REQUIRE_APPROVAL"
 
 echo "=== Scenario 4 - Trusted approval & execution ==="
-howlchangeops approve "$DECISION_ID"
+howlchangeops approve "$DECISION_ID" --owner-confirmed
 EXEC_OUT=$(howlchangeops execute "$DECISION_ID")
 echo "$EXEC_OUT" | grep -q "Executing action: create_release_candidate" && echo "PASS: Action executed"
 echo "$EXEC_OUT" | grep -q "Verified: tag created successfully" && echo "PASS: Post-action verification passed"
@@ -124,7 +124,7 @@ echo "=== Scenario 5 - Stale local evidence ==="
 cd "$TEMP_REPO" && git commit --allow-empty -m "clean commit" && cd - > /dev/null
 howlchangeops validate testrepo
 DECISION_ID2=$(howlchangeops evaluate tests/proposal_1.json | grep "Decision saved as" | awk '{print $4}' | tr -d '.')
-howlchangeops approve "$DECISION_ID2"
+howlchangeops approve "$DECISION_ID2" --owner-confirmed
 # Modify repo before executing
 echo "stale" >> "$TEMP_REPO/file.txt"
 cd "$TEMP_REPO" && git commit -am "stale commit" && cd - > /dev/null
@@ -145,7 +145,7 @@ echo "$CURR_REV" > /tmp/mock_remote_head
 cd - > /dev/null
 howlchangeops validate testrepo
 DECISION_ID_REMOTE=$(howlchangeops evaluate tests/proposal_1.json | grep "Decision saved as" | awk '{print $4}' | tr -d '.')
-howlchangeops approve "$DECISION_ID_REMOTE"
+howlchangeops approve "$DECISION_ID_REMOTE" --owner-confirmed
 # Remote advances before execution
 echo "2222222222222222222222222222222222222222" > /tmp/mock_remote_head
 if howlchangeops execute "$DECISION_ID_REMOTE" 2>&1 | grep -q "STALE_REMOTE_EVIDENCE"; then
@@ -160,7 +160,7 @@ echo "=== Scenario 7 - HowlFrame failure (Fail-Closed) ==="
 cd "$TEMP_REPO" && git commit --allow-empty -m "clean for scenario 7" && cd - > /dev/null
 howlchangeops validate testrepo
 DECISION_ID3=$(howlchangeops evaluate tests/proposal_1.json | grep "Decision saved as" | awk '{print $4}' | tr -d '.')
-howlchangeops approve "$DECISION_ID3"
+howlchangeops approve "$DECISION_ID3" --owner-confirmed
 
 # Break HowlFrame by deleting the policy file temporarily
 mv howlchangeops.hfbc howlchangeops.hfbc.bak
@@ -178,13 +178,13 @@ echo "=== Scenario 8 - Governed Rollback Workflow ==="
 cd "$TEMP_REPO" && git commit --allow-empty -m "clean for rollback test" && cd - > /dev/null
 howlchangeops validate testrepo
 DECISION_ID_RB_TARGET=$(howlchangeops evaluate tests/proposal_1.json | grep "Decision saved as" | awk '{print $4}' | tr -d '.')
-howlchangeops approve "$DECISION_ID_RB_TARGET"
+howlchangeops approve "$DECISION_ID_RB_TARGET" --owner-confirmed
 howlchangeops execute "$DECISION_ID_RB_TARGET"
 # Propose rollback via CLI command
 RB_OUT=$(howlchangeops rollback "$DECISION_ID_RB_TARGET")
 echo "$RB_OUT" | grep -q "REQUIRE_APPROVAL" && echo "PASS: Rollback proposal evaluated and requires approval"
 RB_DEC_ID=$(echo "$RB_OUT" | grep "Rollback decision saved as" | awk '{print $5}' | tr -d '.')
-howlchangeops approve "$RB_DEC_ID"
+howlchangeops approve "$RB_DEC_ID" --owner-confirmed
 RB_EXEC_OUT=$(howlchangeops execute "$RB_DEC_ID")
 echo "$RB_EXEC_OUT" | grep -q "Rolled back tag" && echo "PASS: Rollback executed and tag removed"
 grep -q '"action": "rollback_release_candidate"' "$HOWLCHANGEOPS_BASE/receipts/${RB_DEC_ID}.json" && echo "PASS: Rollback receipt recorded"
@@ -204,7 +204,7 @@ cd "$TEMP_REPO" && git commit --allow-empty -m "clean for scenario 11" && cd - >
 howlchangeops validate testrepo
 DEC_11_OUT=$(howlchangeops evaluate tests/proposal_1.json)
 DEC_11_ID=$(echo "$DEC_11_OUT" | grep "Decision saved as" | awk '{print $4}' | tr -d '.')
-howlchangeops approve "$DEC_11_ID"
+howlchangeops approve "$DEC_11_ID" --owner-confirmed
 # Pre-create conflicting tag to force tag creation failure
 CURR_REV=$(cd "$TEMP_REPO" && git rev-parse HEAD && cd - > /dev/null)
 cd "$TEMP_REPO" && git tag "howlchangeops/rc-${CURR_REV:0:7}" && cd - > /dev/null
@@ -236,7 +236,7 @@ expect "$(echo "$EVAL_JSON" | jfield '["status"]')" "awaiting_human" "evaluate -
 JSON_DEC_ID=$(echo "$EVAL_JSON" | jfield '["data"]["decision_id"]')
 expect "$(echo "$EVAL_JSON" | jfield '["data"]["verdict"]')" "REQUIRE_APPROVAL" "evaluate --json carries the verdict"
 expect "$([ -f "$HOWLCHANGEOPS_BASE/decisions/${JSON_DEC_ID}.json" ] && echo yes)" "yes" "evaluate --json decision_id names the saved decision"
-APPROVE_JSON=$(howlchangeops approve "$JSON_DEC_ID" --json)
+APPROVE_JSON=$(howlchangeops approve "$JSON_DEC_ID" --owner-confirmed --json)
 expect "$(echo "$APPROVE_JSON" | jfield '["status"]')" "ok" "approve --json ok"
 EXEC_JSON=$(howlchangeops execute --json "$JSON_DEC_ID")
 expect "$(echo "$EXEC_JSON" | jfield '["data"]["verification"]')" "PASS" "execute --json reports verification"
@@ -255,5 +255,17 @@ cp config/howlchangeops-config.json "$XDG_TMP/howlchangeops/howlchangeops-config
 XDG_OUT=$(cd "$XDG_TMP" && XDG_CONFIG_HOME="$XDG_TMP" howlchangeops plan testrepo)
 expect "$(echo "$XDG_OUT" | grep -q "create_release_candidate" && echo yes)" "yes" "plan runs from another directory with the XDG config"
 rm -rf "$XDG_TMP"
+
+echo "=== Scenario 15 - Approval is the owner's decision ==="
+cd "$TEMP_REPO" && git commit --allow-empty -m "clean for owner approval scenario" && cd - > /dev/null
+howlchangeops validate testrepo
+OWNER_DEC=$(howlchangeops evaluate --json tests/proposal_1.json | jfield '["data"]["decision_id"]')
+REFUSED=$(howlchangeops approve "$OWNER_DEC" --json < /dev/null || true)
+expect "$(echo "$REFUSED" | jfield '["error"]["code"]')" "OWNER_CONFIRMATION_REQUIRED" "approve without a terminal or --owner-confirmed is refused"
+expect "$([ -f "$HOWLCHANGEOPS_BASE/approvals/${OWNER_DEC}.json" ] && echo yes || echo no)" "no" "a refused approval writes nothing"
+RELAYED=$(howlchangeops approve "$OWNER_DEC" --owner-confirmed --approver owner-alice --json < /dev/null)
+expect "$(echo "$RELAYED" | jfield '["data"]["approver"]')" "owner-alice" "the named approver is recorded"
+expect "$(echo "$RELAYED" | jfield '["data"]["confirmation"]')" "owner_relayed" "a relayed approval says so"
+expect "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["approver"])' "$HOWLCHANGEOPS_BASE/approvals/${OWNER_DEC}.json")" "owner-alice" "the signed approval file names the approver"
 
 echo "ALL INTEGRATION TESTS PASSED"

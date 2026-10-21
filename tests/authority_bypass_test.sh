@@ -126,7 +126,7 @@ cd ../..
 
 OUT=$(./howlchangeops evaluate tests/prop.json) || true
 DEC_ID=$(echo "$OUT" | grep "Decision saved as" | awk '{print $4}' | tr -d '.')
-./howlchangeops approve "$DEC_ID" >/dev/null
+./howlchangeops approve "$DEC_ID" --owner-confirmed >/dev/null
 
 # mutate decision to transfer to testrepo2 and bypass stale evidence
 REV2=$(cd tests/testrepo2 && git rev-parse HEAD)

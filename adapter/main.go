@@ -194,6 +194,7 @@ type Approval struct {
 	Action         string `json:"action"`
 	Revision       string `json:"revision"`
 	Approver       string `json:"approver"`
+	Confirmation   string `json:"confirmation"`
 	IssuedAt       string `json:"issued_at"`
 	ExpiresAt      string `json:"expires_at"`
 	Nonce          string `json:"nonce"`
@@ -309,8 +310,8 @@ func getApprovalKey() []byte {
 }
 
 func canonicalApprovalString(a Approval) string {
-	return fmt.Sprintf("schema:%s|approval_id:%s|decision_id:%s|decision_digest:%s|evidence_digest:%s|repo:%s|action:%s|revision:%s|approver:%s|issued_at:%s|expires_at:%s|nonce:%s",
-		a.Schema, a.ApprovalID, a.DecisionID, a.DecisionDigest, a.EvidenceDigest, a.Repo, a.Action, a.Revision, a.Approver, a.IssuedAt, a.ExpiresAt, a.Nonce)
+	return fmt.Sprintf("schema:%s|approval_id:%s|decision_id:%s|decision_digest:%s|evidence_digest:%s|repo:%s|action:%s|revision:%s|approver:%s|confirmation:%s|issued_at:%s|expires_at:%s|nonce:%s",
+		a.Schema, a.ApprovalID, a.DecisionID, a.DecisionDigest, a.EvidenceDigest, a.Repo, a.Action, a.Revision, a.Approver, a.Confirmation, a.IssuedAt, a.ExpiresAt, a.Nonce)
 }
 
 func signApproval(a Approval, key []byte) string {
@@ -1016,6 +1017,22 @@ func main() {
 			die("blocked", "APPROVAL_KEY_MISSING", "%s", "DENIED: HOWLCHANGEOPS_APPROVAL_KEY_FILE / CHANGEOPS_APPROVAL_KEY_FILE not set or invalid")
 		}
 
+		// Approval is the owner's decision (issue #13): at a terminal the
+		// person confirms here; otherwise a caller must relay a decision the
+		// owner already gave, with --owner-confirmed, and is recorded as such.
+		opts := parseApproveFlags(os.Args[3:])
+		confirmation := "owner_relayed"
+		if !opts.ownerConfirmed {
+			if !stdinIsTerminal() {
+				die("blocked", "OWNER_CONFIRMATION_REQUIRED", "DENIED: approving %s is the owner's decision; run `%s approve %s` at a terminal, or pass --owner-confirmed only to relay a decision the owner gave", decID, progName, decID)
+			}
+			fmt.Fprintf(os.Stderr, "Approve %s on %s at %.12s (decision %s)? [y/N] ", dec.Proposal.Action, dec.Proposal.Repo, dec.Evidence.Revision, decID)
+			if !confirmAtTerminal(os.Stdin) {
+				die("denied", "NOT_CONFIRMED", "Decision %s was not approved.", decID)
+			}
+			confirmation = "terminal"
+		}
+
 		now := time.Now().UTC()
 		app := Approval{
 			Schema:         "howlchangeops.approval/v1",
@@ -1026,7 +1043,8 @@ func main() {
 			Repo:           dec.Proposal.Repo,
 			Action:         dec.Proposal.Action,
 			Revision:       dec.Evidence.Revision,
-			Approver:       "admin", // TODO: read from authenticated context
+			Approver:       approverName(opts.approver),
+			Confirmation:   confirmation,
 			IssuedAt:       now.Format(time.RFC3339),
 			ExpiresAt:      now.Add(30 * time.Minute).Format(time.RFC3339),
 			Nonce:          fmt.Sprintf("%d", now.UnixNano()),
@@ -1044,10 +1062,11 @@ func main() {
 			"approval_id": app.ApprovalID,
 		})
 		succeed("ok", map[string]any{
-			"decision_id": decID,
-			"approval_id": app.ApprovalID,
-			"approver":    app.Approver,
-			"expires_at":  app.ExpiresAt,
+			"decision_id":  decID,
+			"approval_id":  app.ApprovalID,
+			"approver":     app.Approver,
+			"confirmation": app.Confirmation,
+			"expires_at":   app.ExpiresAt,
 		})
 
 	case "execute":

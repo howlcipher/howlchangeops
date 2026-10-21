@@ -15,7 +15,7 @@ As part of the broader Howl ecosystem alongside **HowlFrame** (orchestration & V
 2. **Inspect**: `howlchangeops inspect my_repo` retrieves verifiable Git states.
 3. **Validate**: `howlchangeops validate my_repo` runs tests and stores status safely in a cryptographically bound Evidence Envelope.
 4. **Evaluate**: Submit a JSON intent (e.g. `{"action": "create_release_candidate", "repo": "my_repo"}`). HowlChangeOps evaluates against a compiled `.hfbc` bytecode logic policy via the HowlFrame VM, safely outputting an evaluation decision (e.g. `REQUIRE_APPROVAL`).
-5. **Approve**: A human validates and signs off on the exact deterministic decision snapshot via `howlchangeops approve <decision_id>`, which generates an HMAC-SHA256 signature using the trusted key.
+5. **Approve**: A human validates and signs off on the exact deterministic decision snapshot via `howlchangeops approve <decision_id>` at a terminal (or a tool relays the owner's decision with `--owner-confirmed`), which generates an HMAC-SHA256 signature over the decision, the approver and how the approval was confirmed.
 6. **Execute**: `howlchangeops execute <decision_id>` performs a bounded action (like creating a local Git tag) *only* if the repo's evidence is not stale (`STALE_EVIDENCE`) and the approval hasn't already been consumed.
 7. **Rollback**: `howlchangeops rollback <decision_id>` initiates governed, verified rollback workflows for previously executed actions.
 
@@ -180,9 +180,15 @@ Evaluates an intent payload. Outputs a decision and binds a `decision_id` for ap
 
 ### Approve
 ```bash
-howlchangeops approve <decision_id>
+howlchangeops approve <decision_id>                 # at a terminal: asks "Approve ...? [y/N]"
+howlchangeops approve <decision_id> --owner-confirmed [--approver NAME]
 ```
-Provides trusted authorization context binding directly to a decision state without relying on input intent parameters.
+Approval is the owner's decision. At a terminal HowlChangeOps asks for a `y`.
+Without a terminal it refuses (`OWNER_CONFIRMATION_REQUIRED`) unless the caller
+passes `--owner-confirmed`, which a tool may pass only to relay a decision the
+owner already gave. The signed approval records the approver (`--approver`, or
+the operating-system user) and how it was confirmed (`terminal` or
+`owner_relayed`); both are covered by the HMAC signature.
 
 ### Execute
 ```bash
