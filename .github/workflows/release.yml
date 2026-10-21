@@ -27,8 +27,10 @@ jobs:
       - name: Download pinned HowlFrame
         run: |
           mkdir -p ~/.local/bin
-          wget -q https://github.com/howlcipher/howlframe/releases/download/${HOWLFRAME_PIN_VERSION}/howlframe_${HOWLFRAME_PIN_VERSION}_linux_amd64.tar.gz
-          tar -xzf howlframe_${HOWLFRAME_PIN_VERSION}_linux_amd64.tar.gz -C ~/.local/bin/
+          # Into the runner's temp directory: a tarball in the workspace would be
+          # uploaded with this release's own *.tar.gz archives.
+          wget -q -O "$RUNNER_TEMP/howlframe.tar.gz" https://github.com/howlcipher/howlframe/releases/download/${HOWLFRAME_PIN_VERSION}/howlframe_${HOWLFRAME_PIN_VERSION}_linux_amd64.tar.gz
+          tar -xzf "$RUNNER_TEMP/howlframe.tar.gz" -C ~/.local/bin/
           chmod +x ~/.local/bin/howlframe
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
@@ -90,8 +92,10 @@ jobs:
       - name: Download pinned HowlFrame (host toolchain)
         run: |
           mkdir -p ~/.local/bin
-          wget -q https://github.com/howlcipher/howlframe/releases/download/${HOWLFRAME_PIN_VERSION}/howlframe_${HOWLFRAME_PIN_VERSION}_linux_amd64.tar.gz
-          tar -xzf howlframe_${HOWLFRAME_PIN_VERSION}_linux_amd64.tar.gz -C ~/.local/bin/
+          # Into the runner's temp directory: a tarball in the workspace would be
+          # uploaded with this release's own *.tar.gz archives.
+          wget -q -O "$RUNNER_TEMP/howlframe.tar.gz" https://github.com/howlcipher/howlframe/releases/download/${HOWLFRAME_PIN_VERSION}/howlframe_${HOWLFRAME_PIN_VERSION}_linux_amd64.tar.gz
+          tar -xzf "$RUNNER_TEMP/howlframe.tar.gz" -C ~/.local/bin/
           chmod +x ~/.local/bin/howlframe
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
