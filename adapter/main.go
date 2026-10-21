@@ -9,19 +9,24 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // Version is HowlChangeOps's own release version. Bumped alongside each
 // tagged release; not derived from git state at build time.
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // CompatibleHowlFrameVersion is the HowlFrame release this build's
 // compiled policy (howlchangeops.hfbc) was built and verified against.
 // HowlChangeOps consumes HowlFrame entirely through its public CLI, and
-// strictly enforces this version compatibility pin at startup and execution pre-flight (HOWL-CANON-013).
+// accepts any patch release of this minor release whose HFBC format matches,
+// checked at startup and execution pre-flight (HOWL-CANON-013).
 const CompatibleHowlFrameVersion = "0.1.0"
+
+// CompatibleHFBCFormat is the bytecode format howlchangeops.hfbc is built in.
+const CompatibleHFBCFormat = "1"
 
 func getHowlFrameBin() string {
 	if bin := os.Getenv("HOWLFRAME_BIN"); bin != "" {
@@ -48,11 +53,45 @@ func checkHowlFrameCompatibility() error {
 		return fmt.Errorf("unrecognized howlframe version format: %q", firstLine)
 	}
 	version := strings.TrimPrefix(fields[1], "v")
-	expected := strings.TrimPrefix(CompatibleHowlFrameVersion, "v")
-	if version != expected {
-		return fmt.Errorf("incompatible HowlFrame version: found %s, require %s", version, expected)
+	if !sameMinorRelease(version, CompatibleHowlFrameVersion) {
+		return fmt.Errorf("incompatible HowlFrame version: found %s, require %s.x", version, minorRelease(CompatibleHowlFrameVersion))
+	}
+	// The compiled policy is HFBC; a runner that reports a different
+	// bytecode format cannot load it, whatever its version says.
+	for _, line := range lines[1:] {
+		if format, ok := strings.CutPrefix(strings.TrimSpace(line), "HFBC format:"); ok {
+			if strings.TrimSpace(format) != CompatibleHFBCFormat {
+				return fmt.Errorf("incompatible HowlFrame bytecode: found HFBC format %s, require %s", strings.TrimSpace(format), CompatibleHFBCFormat)
+			}
+		}
 	}
 	return nil
+}
+
+// minorRelease returns "major.minor" of a version string.
+func minorRelease(v string) string {
+	parts := strings.SplitN(strings.TrimPrefix(v, "v"), ".", 3)
+	if len(parts) < 2 {
+		return v
+	}
+	return parts[0] + "." + parts[1]
+}
+
+// sameMinorRelease accepts any patch release of the HowlFrame minor release
+// the policy was built against: HowlFrame is pre-1.0, so a minor bump may
+// change the language, while patch releases may not.
+func sameMinorRelease(found, want string) bool {
+	parts := strings.SplitN(strings.TrimPrefix(found, "v"), ".", 3)
+	if len(parts) != 3 {
+		return false
+	}
+	for _, p := range parts {
+		p, _, _ = strings.Cut(p, "-")
+		if _, err := strconv.Atoi(p); err != nil {
+			return false
+		}
+	}
+	return minorRelease(found) == minorRelease(want)
 }
 
 type ConfigRepo struct {
@@ -204,14 +243,17 @@ func initDirs() {
 }
 
 func loadConfig() (*Config, string, error) {
-	configFile := "config/howlchangeops-config.json"
-	data, err := os.ReadFile(configFile)
-	if err != nil {
-		configFile = "config/changeops-config.json"
-		data, err = os.ReadFile(configFile)
-		if err != nil {
-			return nil, "", err
+	home, _ := os.UserHomeDir()
+	candidates := configCandidates(os.Getenv, home)
+	var data []byte
+	var err error
+	for _, configFile := range candidates {
+		if data, err = os.ReadFile(configFile); err == nil {
+			break
 		}
+	}
+	if err != nil {
+		return nil, "", fmt.Errorf("no configuration found (looked in %s): %w", strings.Join(candidates, ", "), err)
 	}
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
@@ -653,33 +695,47 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
-		fmt.Printf("Usage: %s <command> [args...]\n", progName)
-		os.Exit(1)
+		die("failed", "USAGE", "Usage: %s <command> [args...]", progName)
 	}
 
-	// version/--version must work with no config or .howlchangeops state
-	// directory present -- it's the installer's health/version check, run
-	// against a fresh install before any repo has been configured.
-	if os.Args[1] == "version" || os.Args[1] == "--version" {
+	args, wantJSON := splitJSONFlag(os.Args)
+	os.Args = args
+	cmd := os.Args[1]
+	command = []string{cmd}
+	if wantJSON {
+		enableJSON()
+		if !supportsJSON(cmd) {
+			die("failed", "USAGE", "%s", unknownJSONCommand(cmd))
+		}
+	}
+
+	// interop, version and --version must work with no config or
+	// .howlchangeops state directory present -- they are the installer's
+	// health and compatibility checks, run against a fresh install before any
+	// repo has been configured.
+	if cmd == "interop" {
+		printInterop()
+		return
+	}
+	if cmd == "version" || cmd == "--version" {
 		fmt.Printf("%s %s\n", progName, Version)
-		fmt.Printf("compatible HowlFrame: v%s\n", CompatibleHowlFrameVersion)
+		fmt.Printf("compatible HowlFrame: v%s (HFBC format %s)\n", CompatibleHowlFrameVersion, CompatibleHFBCFormat)
+		succeed("ok", map[string]any{"version": Version, "compatible_howlframe": CompatibleHowlFrameVersion, "hfbc_format": CompatibleHFBCFormat})
 		return
 	}
 
 	initDirs()
 	cfg, configDigest, err := loadConfig()
 	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
-		os.Exit(1)
+		die("unavailable", "CONFIG_UNAVAILABLE", "Error loading config: %v", err)
 	}
-
-	cmd := os.Args[1]
 
 	// Startup pre-flight check for commands that execute or evaluate HowlFrame policy (HOWL-CANON-013)
 	switch cmd {
 	case "plan", "dogfood", "evaluate", "execute":
 		if err := checkHowlFrameCompatibility(); err != nil {
 			fmt.Fprintf(os.Stderr, "HOWLFRAME_INCOMPATIBLE: %v\n", err)
+			writeResult("unavailable", nil, "HOWLFRAME_INCOMPATIBLE", err.Error())
 			os.Exit(1)
 		}
 	}
@@ -687,18 +743,15 @@ func main() {
 	switch cmd {
 	case "inspect":
 		if len(os.Args) < 3 {
-			fmt.Printf("Usage: %s inspect <repo_id>\n", progName)
-			os.Exit(1)
+			die("failed", "USAGE", "Usage: %s inspect <repo_id>", progName)
 		}
 		repoID := os.Args[2]
 		if err := validateRepoIdentifier(repoID); err != nil {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", repoID)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", repoID)
 		}
 		repoCfg, ok := cfg.Repos[repoID]
 		if !ok {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", repoID)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", repoID)
 		}
 		ev, rtEv := gatherEvidence(repoID, repoCfg.Path, repoCfg, configDigest)
 		fmt.Println("Evidence Envelope:")
@@ -710,18 +763,15 @@ func main() {
 
 	case "validate":
 		if len(os.Args) < 3 {
-			fmt.Printf("Usage: %s validate <repo_id>\n", progName)
-			os.Exit(1)
+			die("failed", "USAGE", "Usage: %s validate <repo_id>", progName)
 		}
 		repoID := os.Args[2]
 		if err := validateRepoIdentifier(repoID); err != nil {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", repoID)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", repoID)
 		}
 		repoCfg, ok := cfg.Repos[repoID]
 		if !ok {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", repoID)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", repoID)
 		}
 		if err := validate(repoID, repoCfg.Path, repoCfg, configDigest); err != nil {
 			fmt.Fprintf(os.Stderr, "VALIDATION_FAILED: %v\n", err)
@@ -730,18 +780,15 @@ func main() {
 
 	case "plan":
 		if len(os.Args) < 3 {
-			fmt.Printf("Usage: %s plan <repo_id>\n", progName)
-			os.Exit(1)
+			die("failed", "USAGE", "Usage: %s plan <repo_id>", progName)
 		}
 		repoID := os.Args[2]
 		if err := validateRepoIdentifier(repoID); err != nil {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", repoID)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", repoID)
 		}
 		repoCfg, ok := cfg.Repos[repoID]
 		if !ok {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", repoID)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", repoID)
 		}
 		ev, rtEv := gatherEvidence(repoID, repoCfg.Path, repoCfg, configDigest)
 
@@ -783,18 +830,15 @@ func main() {
 
 	case "dogfood":
 		if len(os.Args) < 3 {
-			fmt.Printf("Usage: %s dogfood <repo_id>\n", progName)
-			os.Exit(1)
+			die("failed", "USAGE", "Usage: %s dogfood <repo_id>", progName)
 		}
 		repoID := os.Args[2]
 		if err := validateRepoIdentifier(repoID); err != nil {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", repoID)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", repoID)
 		}
 		repoCfg, ok := cfg.Repos[repoID]
 		if !ok {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", repoID)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", repoID)
 		}
 
 		fmt.Println("HowlChangeOps Self-Dogfooding Workflow")
@@ -825,8 +869,7 @@ func main() {
 		fmt.Println("4. Evaluating proposal through HowlFrame policy...")
 		res, err := invokeHowlFrame(tmpProp, ev, rtEv, repoCfg)
 		if err != nil {
-			fmt.Printf("Evaluation error: %v\n", err)
-			os.Exit(1)
+			die("failed", "EVALUATION_ERROR", "Evaluation error: %v", err)
 		}
 
 		decision := res["decision"].(string)
@@ -869,42 +912,35 @@ func main() {
 
 	case "evaluate":
 		if len(os.Args) < 3 {
-			fmt.Printf("Usage: %s evaluate <proposal.json>\n", progName)
-			os.Exit(1)
+			die("failed", "USAGE", "Usage: %s evaluate <proposal.json>", progName)
 		}
 		proposalFile := os.Args[2]
 		propData, err := os.ReadFile(proposalFile)
 		if err != nil {
-			fmt.Printf("Error reading proposal: %v\n", err)
-			os.Exit(1)
+			die("failed", "INVALID_INPUT", "Error reading proposal: %v", err)
 		}
 		var prop Proposal
 		if err := json.Unmarshal(propData, &prop); err != nil {
-			fmt.Printf("Error parsing proposal: %v\n", err)
-			os.Exit(1)
+			die("failed", "INVALID_INPUT", "Error parsing proposal: %v", err)
 		}
 
 		if err := validateActionName(prop.Action); err != nil {
-			fmt.Println("DENY: Invalid proposal action name format")
-			os.Exit(1)
+			die("denied", "INVALID_ACTION", "%s", "DENY: Invalid proposal action name format")
 		}
 
 		if err := validateRepoIdentifier(prop.Repo); err != nil {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", prop.Repo)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", prop.Repo)
 		}
 
 		repoCfg, ok := cfg.Repos[prop.Repo]
 		if !ok {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", prop.Repo)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", prop.Repo)
 		}
 
 		ev, rtEv := gatherEvidence(prop.Repo, repoCfg.Path, repoCfg, configDigest)
 		res, err := invokeHowlFrame(proposalFile, ev, rtEv, repoCfg)
 		if err != nil {
-			fmt.Printf("Evaluation error: %v\n", err)
-			os.Exit(1)
+			die("failed", "EVALUATION_ERROR", "Evaluation error: %v", err)
 		}
 
 		decisionID := fmt.Sprintf("decision-%x", sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", prop.Action, ev.Revision, time.Now().UnixNano()))))[:16]
@@ -934,40 +970,50 @@ func main() {
 
 		fmt.Printf("Decision: %s\nReason: %s\n", dec.Result, dec.Reason)
 
+		saved := false
 		if dec.Result == "REQUIRE_APPROVAL" {
 			decData, _ := json.MarshalIndent(dec, "", "  ")
 			os.WriteFile(filepath.Join(decisionsDir, dec.ID+".json"), decData, 0644)
 			fmt.Printf("Decision saved as %s. Use '%s approve %s' to approve.\n", dec.ID, progName, dec.ID)
+			saved = true
 		}
 
 		appendAudit(map[string]interface{}{
 			"event":    "evaluate",
 			"decision": dec,
 		})
+		succeed(verdictStatus(dec.Result), map[string]any{
+			"decision_id":     dec.ID,
+			"decision_saved":  saved,
+			"verdict":         dec.Result,
+			"reason":          dec.Reason,
+			"gates":           gatesData(dec.Gates),
+			"action":          prop.Action,
+			"repo":            prop.Repo,
+			"revision":        ev.Revision,
+			"decision_digest": dec.Digest,
+			"evidence_digest": rtEv.EvidenceDigest,
+		})
 
 	case "approve":
 		if len(os.Args) < 3 {
-			fmt.Printf("Usage: %s approve <decision_id>\n", progName)
-			os.Exit(1)
+			die("failed", "USAGE", "Usage: %s approve <decision_id>", progName)
 		}
 		decID := os.Args[2]
 		decFile := filepath.Join(decisionsDir, decID+".json")
 		decData, err := os.ReadFile(decFile)
 		if err != nil {
-			fmt.Printf("Decision not found: %v\n", err)
-			os.Exit(1)
+			die("failed", "DECISION_NOT_FOUND", "Decision not found: %v", err)
 		}
 		var dec Decision
 		json.Unmarshal(decData, &dec)
 		if dec.Digest != computeDecisionDigest(dec) {
-			fmt.Println("Decision modified")
-			os.Exit(1)
+			die("denied", "DECISION_MODIFIED", "%s", "Decision modified")
 		}
 
 		key := getApprovalKey()
 		if key == nil {
-			fmt.Println("DENIED: HOWLCHANGEOPS_APPROVAL_KEY_FILE / CHANGEOPS_APPROVAL_KEY_FILE not set or invalid")
-			os.Exit(1)
+			die("blocked", "APPROVAL_KEY_MISSING", "%s", "DENIED: HOWLCHANGEOPS_APPROVAL_KEY_FILE / CHANGEOPS_APPROVAL_KEY_FILE not set or invalid")
 		}
 
 		now := time.Now().UTC()
@@ -997,24 +1043,27 @@ func main() {
 			"decision_id": decID,
 			"approval_id": app.ApprovalID,
 		})
+		succeed("ok", map[string]any{
+			"decision_id": decID,
+			"approval_id": app.ApprovalID,
+			"approver":    app.Approver,
+			"expires_at":  app.ExpiresAt,
+		})
 
 	case "execute":
 		if len(os.Args) < 3 {
-			fmt.Printf("Usage: %s execute <decision_id>\n", progName)
-			os.Exit(1)
+			die("failed", "USAGE", "Usage: %s execute <decision_id>", progName)
 		}
 		decID := os.Args[2]
 		decFile := filepath.Join(decisionsDir, decID+".json")
 		decData, err := os.ReadFile(decFile)
 		if err != nil {
-			fmt.Printf("Decision not found: %v\n", err)
-			os.Exit(1)
+			die("failed", "DECISION_NOT_FOUND", "Decision not found: %v", err)
 		}
 		var dec Decision
 		json.Unmarshal(decData, &dec)
 		if dec.Digest != computeDecisionDigest(dec) {
-			fmt.Println("DENIED: Decision modified")
-			os.Exit(1)
+			die("denied", "DECISION_MODIFIED", "%s", "DENIED: Decision modified")
 		}
 
 		// Replay protection - check existing receipts
@@ -1023,20 +1072,16 @@ func main() {
 			var prevRec ExecutionReceipt
 			if json.Unmarshal(recData, &prevRec) == nil {
 				if prevRec.Verification == "PASS" {
-					fmt.Println("DENIED: Decision already executed successfully")
-				} else {
-					fmt.Printf("DENIED: Decision previously failed execution with verification %s (rollback: %s)\n", prevRec.Verification, prevRec.RollbackStatus)
+					die("denied", "ALREADY_EXECUTED", "%s", "DENIED: Decision already executed successfully")
 				}
-			} else {
-				fmt.Println("DENIED: Decision already executed")
+				die("denied", "ALREADY_EXECUTED", "DENIED: Decision previously failed execution with verification %s (rollback: %s)", prevRec.Verification, prevRec.RollbackStatus)
 			}
-			os.Exit(1)
+			die("denied", "ALREADY_EXECUTED", "%s", "DENIED: Decision already executed")
 		}
 
 		repoCfg, ok := cfg.Repos[dec.Proposal.Repo]
 		if !ok {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", dec.Proposal.Repo)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", dec.Proposal.Repo)
 		}
 
 		// Gather current evidence to check for staleness
@@ -1044,8 +1089,7 @@ func main() {
 
 		key := getApprovalKey()
 		if key == nil {
-			fmt.Println("DENIED: HOWLCHANGEOPS_APPROVAL_KEY_FILE / CHANGEOPS_APPROVAL_KEY_FILE not set")
-			os.Exit(1)
+			die("blocked", "APPROVAL_KEY_MISSING", "%s", "DENIED: HOWLCHANGEOPS_APPROVAL_KEY_FILE / CHANGEOPS_APPROVAL_KEY_FILE not set")
 		}
 
 		// Check for valid approval
@@ -1058,12 +1102,10 @@ func main() {
 				if time.Now().UTC().Before(exp) {
 					rtEv.Approved = "true"
 				} else {
-					fmt.Println("DENIED: Approval expired")
-					os.Exit(1)
+					die("denied", "APPROVAL_EXPIRED", "%s", "DENIED: Approval expired")
 				}
 			} else {
-				fmt.Println("DENIED: Approval integrity invalid")
-				os.Exit(1)
+				die("denied", "APPROVAL_INVALID", "%s", "DENIED: Approval integrity invalid")
 			}
 		}
 
@@ -1075,17 +1117,24 @@ func main() {
 
 		res, err := invokeHowlFrame(tmpProp, dec.Evidence, rtEv, repoCfg)
 		if err != nil {
-			fmt.Printf("Execution evaluation error: %v\n", err)
-			os.Exit(1)
+			die("failed", "EVALUATION_ERROR", "Execution evaluation error: %v", err)
 		}
 
 		if res["decision"].(string) != "ALLOW" {
 			fmt.Printf("Execution DENIED: %s. Reason: %s\n", res["decision"], res["reason"])
+			code := "DENIED"
 			if strings.Contains(res["reason"].(string), "STALE_REMOTE_EVIDENCE") {
 				fmt.Println("STALE_REMOTE_EVIDENCE")
+				code = "STALE_REMOTE_EVIDENCE"
 			} else if strings.Contains(res["reason"].(string), "STALE_EVIDENCE") {
 				fmt.Println("STALE_EVIDENCE")
+				code = "STALE_EVIDENCE"
 			}
+			status := "denied"
+			if res["decision"] == "REQUIRE_APPROVAL" {
+				status = "awaiting_human"
+			}
+			writeResult(status, map[string]any{"decision_id": decID, "verdict": res["decision"]}, code, fmt.Sprint(res["reason"]))
 			os.Exit(1)
 		}
 
@@ -1228,51 +1277,56 @@ func main() {
 			"error":           errMsg,
 		})
 
+		execData := map[string]any{
+			"decision_id":     decID,
+			"approval_id":     app.ApprovalID,
+			"action":          dec.Proposal.Action,
+			"repo":            dec.Proposal.Repo,
+			"revision":        rtEv.CurrentRevision,
+			"verification":    verStatus,
+			"rollback_status": rollbackStatus,
+			"receipt_schema":  receipt.Schema,
+		}
 		if !success {
+			writeResult("failed", execData, "EXECUTION_FAILED", errMsg)
 			os.Exit(1)
 		}
+		succeed("ok", execData)
 
 	case "rollback":
 		if len(os.Args) < 3 {
-			fmt.Printf("Usage: %s rollback <decision_id>\n", progName)
-			os.Exit(1)
+			die("failed", "USAGE", "Usage: %s rollback <decision_id>", progName)
 		}
 		decID := os.Args[2]
 		decFile := filepath.Join(decisionsDir, decID+".json")
 		decData, err := os.ReadFile(decFile)
 		if err != nil {
-			fmt.Printf("Decision not found: %v\n", err)
-			os.Exit(1)
+			die("failed", "DECISION_NOT_FOUND", "Decision not found: %v", err)
 		}
 		var dec Decision
 		if err := json.Unmarshal(decData, &dec); err != nil {
-			fmt.Printf("Error parsing decision: %v\n", err)
-			os.Exit(1)
+			die("failed", "INVALID_INPUT", "Error parsing decision: %v", err)
 		}
 
 		// Verify that this decision was previously executed
 		receiptFile := filepath.Join(receiptsDir, decID+".json")
 		recData, err := os.ReadFile(receiptFile)
 		if err != nil {
-			fmt.Printf("Cannot rollback: decision %s has not been executed.\n", decID)
-			os.Exit(1)
+			die("blocked", "ROLLBACK_NOT_APPLICABLE", "Cannot rollback: decision %s has not been executed.", decID)
 		}
 		var rec ExecutionReceipt
 		json.Unmarshal(recData, &rec)
 		if rec.Verification != "PASS" {
-			fmt.Printf("Cannot rollback: decision %s did not successfully complete execution.\n", decID)
-			os.Exit(1)
+			die("blocked", "ROLLBACK_NOT_APPLICABLE", "Cannot rollback: decision %s did not successfully complete execution.", decID)
 		}
 
 		if dec.Proposal.Action != "create_release_candidate" {
-			fmt.Printf("Rollback only applies to create_release_candidate decisions (found: %s).\n", dec.Proposal.Action)
-			os.Exit(1)
+			die("blocked", "ROLLBACK_NOT_APPLICABLE", "Rollback only applies to create_release_candidate decisions (found: %s).", dec.Proposal.Action)
 		}
 
 		repoCfg, ok := cfg.Repos[dec.Proposal.Repo]
 		if !ok {
-			fmt.Printf("UNKNOWN_REPOSITORY: %s\n", dec.Proposal.Repo)
-			os.Exit(1)
+			die("failed", "UNKNOWN_REPOSITORY", "UNKNOWN_REPOSITORY: %s", dec.Proposal.Repo)
 		}
 
 		tag := fmt.Sprintf("howlchangeops/rc-%s", dec.Evidence.Revision[:7])
@@ -1282,8 +1336,7 @@ func main() {
 			tagCheck, _ = gitCommand(repoCfg.Path, "tag", "-l", tag)
 		}
 		if tagCheck == "" {
-			fmt.Printf("Candidate tag %s does not exist; nothing to rollback.\n", tag)
-			os.Exit(1)
+			die("blocked", "ROLLBACK_NOT_APPLICABLE", "Candidate tag %s does not exist; nothing to rollback.", tag)
 		}
 
 		rbProp := Proposal{
@@ -1301,8 +1354,7 @@ func main() {
 		ev, rtEv := gatherEvidence(dec.Proposal.Repo, repoCfg.Path, repoCfg, configDigest)
 		res, err := invokeHowlFrame(tmpProp, ev, rtEv, repoCfg)
 		if err != nil {
-			fmt.Printf("Rollback evaluation error: %v\n", err)
-			os.Exit(1)
+			die("failed", "EVALUATION_ERROR", "Rollback evaluation error: %v", err)
 		}
 
 		rbDecID := fmt.Sprintf("decision-%x", sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", rbProp.Action, ev.Revision, time.Now().UnixNano()))))[:16]
@@ -1335,8 +1387,7 @@ func main() {
 			os.WriteFile(filepath.Join(decisionsDir, rbDec.ID+".json"), decData, 0644)
 			fmt.Printf("Rollback decision saved as %s. Use '%s approve %s' then '%s execute %s' to apply rollback.\n", rbDec.ID, progName, rbDec.ID, progName, rbDec.ID)
 		} else if rbDec.Result == "DENY" {
-			fmt.Printf("Rollback denied by policy: %s\n", rbDec.Reason)
-			os.Exit(1)
+			die("denied", "DENIED", "Rollback denied by policy: %s", rbDec.Reason)
 		}
 
 		appendAudit(map[string]interface{}{
@@ -1344,26 +1395,41 @@ func main() {
 			"target_decision":   decID,
 			"rollback_decision": rbDec,
 		})
+		succeed(verdictStatus(rbDec.Result), map[string]any{
+			"target_decision_id": decID,
+			"decision_id":        rbDec.ID,
+			"decision_saved":     rbDec.Result == "REQUIRE_APPROVAL",
+			"verdict":            rbDec.Result,
+			"reason":             rbDec.Reason,
+			"gates":              gatesData(rbDec.Gates),
+		})
 
 	case "history":
 		data, err := os.ReadFile(historyFile)
 		if err != nil {
 			fmt.Println("No history found.")
+			succeed("ok", map[string]any{"entries": []any{}})
 			return
 		}
 		fmt.Println(string(data))
+		entries := []any{}
+		for _, line := range strings.Split(string(data), "\n") {
+			var entry any
+			if strings.TrimSpace(line) != "" && json.Unmarshal([]byte(line), &entry) == nil {
+				entries = append(entries, entry)
+			}
+		}
+		succeed("ok", map[string]any{"entries": entries})
 
 	case "explain":
 		if len(os.Args) < 3 {
-			fmt.Printf("Usage: %s explain <decision_id>\n", progName)
-			os.Exit(1)
+			die("failed", "USAGE", "Usage: %s explain <decision_id>", progName)
 		}
 		decID := os.Args[2]
 		decFile := filepath.Join(decisionsDir, decID+".json")
 		decData, err := os.ReadFile(decFile)
 		if err != nil {
-			fmt.Printf("Decision not found: %v\n", err)
-			os.Exit(1)
+			die("failed", "DECISION_NOT_FOUND", "Decision not found: %v", err)
 		}
 		var dec Decision
 		json.Unmarshal(decData, &dec)
@@ -1375,9 +1441,12 @@ func main() {
 		fmt.Printf("\nReason: %s\n", dec.Reason)
 
 		receiptFile := filepath.Join(receiptsDir, decID+".json")
+		var receipt *ExecutionReceipt
+		defer func() { succeed("ok", map[string]any{"decision": dec, "receipt": receipt}) }()
 		if recData, err := os.ReadFile(receiptFile); err == nil {
 			var rec ExecutionReceipt
 			if json.Unmarshal(recData, &rec) == nil {
+				receipt = &rec
 				fmt.Printf("\nExecution Receipt:\n")
 				fmt.Printf("  - Executed At: %s\n", rec.ExecutedAt)
 				fmt.Printf("  - Verification: %s\n", rec.Verification)
@@ -1391,7 +1460,6 @@ func main() {
 		}
 
 	default:
-		fmt.Printf("Unknown command: %s\n", cmd)
-		os.Exit(1)
+		die("failed", "UNKNOWN_COMMAND", "Unknown command: %s", cmd)
 	}
 }

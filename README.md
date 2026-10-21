@@ -77,10 +77,36 @@ or moving a source build. A policy in the caller's working directory cannot
 replace the installed sidecar. Missing installed policy fails evaluation.
 
 ## HowlFrame dependency
-HowlChangeOps consumes **HowlFrame v0.1.0** entirely via its public CLI interface. It is independent of HowlFrame's source code, serving as real-world dogfooding for the platform's release candidates. See the dogfooding report in `docs/howlframe_dogfooding_report.md` for findings.
+HowlChangeOps consumes **HowlFrame 0.1.x** (any patch release of 0.1 whose `--version` reports `HFBC format: 1`) entirely via its public CLI interface. It is independent of HowlFrame's source code, serving as real-world dogfooding for the platform's release candidates. See the dogfooding report in `docs/howlframe_dogfooding_report.md` for findings.
 
 ## Configuration
-Configure repositories securely via `config/howlchangeops-config.json` (or `config/changeops-config.json`). Refer to the `.example.json` file for mapping logical repo IDs to physical absolute paths and their bounded actions.
+Configure repositories in a JSON file; see `config/howlchangeops-config.example.json` for mapping logical repo IDs to physical absolute paths and their bounded actions. HowlChangeOps reads the first of:
+
+1. the file named by `HOWLCHANGEOPS_CONFIG` (or `CHANGEOPS_CONFIG`);
+2. `$XDG_CONFIG_HOME/howlchangeops/howlchangeops-config.json` (default `~/.config/howlchangeops/`);
+3. `config/howlchangeops-config.json`, then `config/changeops-config.json`, relative to the working directory (legacy).
+
+Prefer the XDG location: it works from any directory and survives `howl update`, which replaces the release directory.
+
+## Machine-readable output
+Other Howl components call HowlChangeOps through its command line under the
+[Howl interop contract](https://github.com/howlcipher/howl/blob/main/docs/INTEROP.md).
+`howlchangeops interop --json` prints the `howl.interop/v1` descriptor (commands, flags, exit codes, and the HowlFrame commands it runs).
+
+`version`, `evaluate`, `approve`, `execute`, `rollback`, `history` and `explain` accept `--json`. Stdout then carries exactly one `howl.result/v1` envelope and the human-readable progress goes to stderr:
+
+```json
+{
+  "schema": "howl.result/v1",
+  "component": "howlchangeops",
+  "command": ["evaluate"],
+  "status": "awaiting_human",
+  "data": {"decision_id": "decision-…", "decision_saved": true, "verdict": "REQUIRE_APPROVAL", "reason": "…", "gates": [], "action": "create_release_candidate", "repo": "my_repo", "revision": "…", "decision_digest": "…", "evidence_digest": "…"},
+  "error": null
+}
+```
+
+Branch on `status`: `ok` (ALLOW, or a completed approve/execute), `awaiting_human` (REQUIRE_APPROVAL), `denied` (a DENY verdict or a refused execution; `error.code` is `DENIED`, `STALE_EVIDENCE`, `STALE_REMOTE_EVIDENCE`, `ALREADY_EXECUTED`, `APPROVAL_EXPIRED`, …), `blocked` (for example `APPROVAL_KEY_MISSING`), `unavailable` (`CONFIG_UNAVAILABLE`, `HOWLFRAME_INCOMPATIBLE`), or `failed`. Exit codes are unchanged: `evaluate` exits 0 for every verdict, and refusals and errors exit 1.
 
 ## CLI Usage
 
@@ -187,7 +213,7 @@ To prevent disruption to existing automated workflows, `changeops` is preserved 
 - Executable: `howlchangeops` (canonical) and `changeops` (alias)
 - Environment: `HOWLCHANGEOPS_BASE` (primary) and `CHANGEOPS_BASE` (fallback)
 - Keys: `HOWLCHANGEOPS_APPROVAL_KEY_FILE` (primary) and `CHANGEOPS_APPROVAL_KEY_FILE` (fallback)
-- Config: `config/howlchangeops-config.json` (primary) and `config/changeops-config.json` (fallback)
+- Config: `HOWLCHANGEOPS_CONFIG` (primary) and `CHANGEOPS_CONFIG` (fallback); `config/howlchangeops-config.json` (primary) and `config/changeops-config.json` (fallback) after the XDG location
 
 ## Trust boundary
 - **AI Proposal:** Can dictate the logical repo ID, action to pursue, and descriptive reasons.
