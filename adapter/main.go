@@ -732,6 +732,10 @@ func main() {
 		succeed("ok", map[string]any{"version": Version, "compatible_howlframe": CompatibleHowlFrameVersion, "hfbc_format": CompatibleHFBCFormat})
 		return
 	}
+	if cmd == "authority" {
+		runAuthority(os.Args[2:])
+		return
+	}
 
 	initDirs()
 	cfg, configDigest, err := loadConfig()
@@ -745,8 +749,13 @@ func main() {
 	if cfg.AuthorizationModel != "" && cfg.AuthorizationModel != "cooperative" && cfg.AuthorizationModel != "model_b" {
 		die("blocked", "AUTHORIZATION_MODEL_INVALID", "%s", "Unknown authorization_model; refusing authorization downgrade")
 	}
-	if cfg.AuthorizationModel == "model_b" && (cmd == "approve" || cmd == "execute") {
-		die("blocked", "INDEPENDENT_AUTHORIZATION_UNAVAILABLE", "%s", "Model B protected executor is not deployed; terminal confirmation and owner-confirmed flags cannot authorize this operation")
+	if cfg.AuthorizationModel == "model_b" {
+		if cmd == "approve" {
+			die("blocked", "INDEPENDENT_AUTHORIZATION_UNAVAILABLE", "%s", "Model B requires independent owner signing; use 'howlchangeops authority sign' outside the agent session")
+		}
+		if cmd == "execute" && os.Getenv("HOWLCHANGEOPS_AUTHORITY_LEDGER") == "" {
+			die("blocked", "INDEPENDENT_AUTHORIZATION_UNAVAILABLE", "%s", "Model B protected executor is not deployed; terminal confirmation and owner-confirmed flags cannot authorize this operation")
+		}
 	}
 
 	// Startup pre-flight check for commands that execute or evaluate HowlFrame policy (HOWL-CANON-013)
@@ -760,6 +769,8 @@ func main() {
 	}
 
 	switch cmd {
+	case "authority":
+		runAuthority(os.Args[2:])
 	case "inspect":
 		if len(os.Args) < 3 {
 			die("failed", "USAGE", "Usage: %s inspect <repo_id>", progName)
@@ -1104,6 +1115,11 @@ func main() {
 		json.Unmarshal(decData, &dec)
 		if dec.Digest != computeDecisionDigest(dec) {
 			die("denied", "DECISION_MODIFIED", "%s", "DENIED: Decision modified")
+		}
+
+		if cfg.AuthorizationModel == "model_b" {
+			executeModelB(dec, cfg)
+			return
 		}
 
 		// Replay protection - check existing receipts

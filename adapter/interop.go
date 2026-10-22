@@ -167,6 +167,7 @@ var interopCommands = []interopCommand{
 	{Path: []string{"rollback"}, Flags: []string{"--json"}, JSON: true, Emits: []string{resultSchema}},
 	{Path: []string{"history"}, Flags: []string{"--json"}, JSON: true, Emits: []string{resultSchema}},
 	{Path: []string{"explain"}, Flags: []string{"--json"}, JSON: true, Emits: []string{resultSchema}},
+	{Path: []string{"authority"}, Flags: []string{"--json"}, JSON: true, Emits: []string{resultSchema}},
 }
 
 func interopDescriptor() map[string]any {
@@ -182,6 +183,7 @@ func interopDescriptor() map[string]any {
 		"env": []string{
 			"HOWLCHANGEOPS_BASE", "CHANGEOPS_BASE", "HOWLCHANGEOPS_CONFIG", "CHANGEOPS_CONFIG",
 			"HOWLCHANGEOPS_APPROVAL_KEY_FILE", "CHANGEOPS_APPROVAL_KEY_FILE", "HOWLFRAME_BIN", "XDG_CONFIG_HOME",
+			"HOWLCHANGEOPS_AUTHORITY_LEDGER", "HOWLCHANGEOPS_AUTHORITY_ENROLLMENT", "HOWLCHANGEOPS_AUTHORITY_AUDIENCE",
 		},
 		"consumes": []interopConsume{
 			{Component: "howlframe", Command: []string{}, Flags: []string{"--version"}, MinVersion: CompatibleHowlFrameVersion},
