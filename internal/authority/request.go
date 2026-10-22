@@ -34,9 +34,14 @@ type Request struct {
 	Parameters json.RawMessage  `json:"parameters"`
 }
 
-func hash(data []byte) string {
+// Hash returns the lowercase hex sha256 digest of data.
+func Hash(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+func hash(data []byte) string {
+	return Hash(data)
 }
 
 // CanonicalParameters rejects duplicate keys, excessive nesting, nonobjects and
