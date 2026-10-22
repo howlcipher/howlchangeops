@@ -102,7 +102,8 @@ type ConfigRepo struct {
 }
 
 type Config struct {
-	Repos map[string]ConfigRepo `json:"repos"`
+	AuthorizationModel string                `json:"authorization_model,omitempty"`
+	Repos              map[string]ConfigRepo `json:"repos"`
 }
 
 type Proposal struct {
@@ -185,33 +186,35 @@ type Decision struct {
 }
 
 type Approval struct {
-	Schema         string `json:"schema"`
-	ApprovalID     string `json:"approval_id"`
-	DecisionID     string `json:"decision_id"`
-	DecisionDigest string `json:"decision_digest"`
-	EvidenceDigest string `json:"evidence_digest"`
-	Repo           string `json:"repo"`
-	Action         string `json:"action"`
-	Revision       string `json:"revision"`
-	Approver       string `json:"approver"`
-	Confirmation   string `json:"confirmation"`
-	IssuedAt       string `json:"issued_at"`
-	ExpiresAt      string `json:"expires_at"`
-	Nonce          string `json:"nonce"`
-	Signature      string `json:"signature"`
+	AuthorizationGuarantee string `json:"authorization_guarantee,omitempty"`
+	Schema                 string `json:"schema"`
+	ApprovalID             string `json:"approval_id"`
+	DecisionID             string `json:"decision_id"`
+	DecisionDigest         string `json:"decision_digest"`
+	EvidenceDigest         string `json:"evidence_digest"`
+	Repo                   string `json:"repo"`
+	Action                 string `json:"action"`
+	Revision               string `json:"revision"`
+	Approver               string `json:"approver"`
+	Confirmation           string `json:"confirmation"`
+	IssuedAt               string `json:"issued_at"`
+	ExpiresAt              string `json:"expires_at"`
+	Nonce                  string `json:"nonce"`
+	Signature              string `json:"signature"`
 }
 
 type ExecutionReceipt struct {
-	Schema         string `json:"schema"`
-	DecisionID     string `json:"decision_id"`
-	ApprovalID     string `json:"approval_id"`
-	Action         string `json:"action"`
-	Repo           string `json:"repo"`
-	Revision       string `json:"revision"`
-	ExecutedAt     string `json:"executed_at"`
-	Verification   string `json:"verification"`
-	RollbackStatus string `json:"rollback_status,omitempty"`
-	ErrorMessage   string `json:"error_message,omitempty"`
+	AuthorizationGuarantee string `json:"authorization_guarantee,omitempty"`
+	Schema                 string `json:"schema"`
+	DecisionID             string `json:"decision_id"`
+	ApprovalID             string `json:"approval_id"`
+	Action                 string `json:"action"`
+	Repo                   string `json:"repo"`
+	Revision               string `json:"revision"`
+	ExecutedAt             string `json:"executed_at"`
+	Verification           string `json:"verification"`
+	RollbackStatus         string `json:"rollback_status,omitempty"`
+	ErrorMessage           string `json:"error_message,omitempty"`
 }
 
 var (
@@ -310,8 +313,13 @@ func getApprovalKey() []byte {
 }
 
 func canonicalApprovalString(a Approval) string {
-	return fmt.Sprintf("schema:%s|approval_id:%s|decision_id:%s|decision_digest:%s|evidence_digest:%s|repo:%s|action:%s|revision:%s|approver:%s|confirmation:%s|issued_at:%s|expires_at:%s|nonce:%s",
+	payload := fmt.Sprintf("schema:%s|approval_id:%s|decision_id:%s|decision_digest:%s|evidence_digest:%s|repo:%s|action:%s|revision:%s|approver:%s|confirmation:%s|issued_at:%s|expires_at:%s|nonce:%s",
 		a.Schema, a.ApprovalID, a.DecisionID, a.DecisionDigest, a.EvidenceDigest, a.Repo, a.Action, a.Revision, a.Approver, a.Confirmation, a.IssuedAt, a.ExpiresAt, a.Nonce)
+	// Preserve old record verification while binding explicit guarantee on new records.
+	if a.AuthorizationGuarantee != "" {
+		payload += "|authorization_guarantee:" + a.AuthorizationGuarantee
+	}
+	return payload
 }
 
 func signApproval(a Approval, key []byte) string {
@@ -731,6 +739,16 @@ func main() {
 		die("unavailable", "CONFIG_UNAVAILABLE", "Error loading config: %v", err)
 	}
 
+	// Model B cannot fall back to shared-account terminal/HMAC approval. Until
+	// a protected executor, enrollment and replay ledger are deployed, deny both
+	// minting approval and executing effects before touching legacy paths.
+	if cfg.AuthorizationModel != "" && cfg.AuthorizationModel != "cooperative" && cfg.AuthorizationModel != "model_b" {
+		die("blocked", "AUTHORIZATION_MODEL_INVALID", "%s", "Unknown authorization_model; refusing authorization downgrade")
+	}
+	if cfg.AuthorizationModel == "model_b" && (cmd == "approve" || cmd == "execute") {
+		die("blocked", "INDEPENDENT_AUTHORIZATION_UNAVAILABLE", "%s", "Model B protected executor is not deployed; terminal confirmation and owner-confirmed flags cannot authorize this operation")
+	}
+
 	// Startup pre-flight check for commands that execute or evaluate HowlFrame policy (HOWL-CANON-013)
 	switch cmd {
 	case "plan", "dogfood", "evaluate", "execute":
@@ -881,7 +899,7 @@ func main() {
 
 		if decision == "REQUIRE_APPROVAL" {
 			decisionID := fmt.Sprintf("decision-%x", sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", prop.Action, ev.Revision, time.Now().UnixNano()))))[:16]
-			fmt.Printf("\nBOUNDARY: Human approval required. Cannot silently self-approve.\n")
+			fmt.Printf("\nBOUNDARY: Cooperative owner confirmation required; shared-account callers are not independently authenticated.\n")
 			fmt.Printf("Use '%s approve %s' to authorize this proposal.\n", progName, decisionID)
 
 			// Save decision
@@ -1017,9 +1035,9 @@ func main() {
 			die("blocked", "APPROVAL_KEY_MISSING", "%s", "DENIED: HOWLCHANGEOPS_APPROVAL_KEY_FILE / CHANGEOPS_APPROVAL_KEY_FILE not set or invalid")
 		}
 
-		// Approval is the owner's decision (issue #13): at a terminal the
-		// person confirms here; otherwise a caller must relay a decision the
-		// owner already gave, with --owner-confirmed, and is recorded as such.
+		// Legacy cooperative confirmation records a caller assertion only.
+		// Neither a terminal nor --owner-confirmed authenticates a human against
+		// same-account agents. This path is unavailable in model_b mode.
 		opts := parseApproveFlags(os.Args[3:])
 		confirmation := "owner_relayed"
 		if !opts.ownerConfirmed {
@@ -1035,19 +1053,20 @@ func main() {
 
 		now := time.Now().UTC()
 		app := Approval{
-			Schema:         "howlchangeops.approval/v1",
-			ApprovalID:     fmt.Sprintf("app-%x", sha256.Sum256([]byte(fmt.Sprintf("%s-%d", dec.ID, now.UnixNano()))))[:16],
-			DecisionID:     dec.ID,
-			DecisionDigest: dec.Digest,
-			EvidenceDigest: dec.RuntimeEvidence.EvidenceDigest,
-			Repo:           dec.Proposal.Repo,
-			Action:         dec.Proposal.Action,
-			Revision:       dec.Evidence.Revision,
-			Approver:       approverName(opts.approver),
-			Confirmation:   confirmation,
-			IssuedAt:       now.Format(time.RFC3339),
-			ExpiresAt:      now.Add(30 * time.Minute).Format(time.RFC3339),
-			Nonce:          fmt.Sprintf("%d", now.UnixNano()),
+			AuthorizationGuarantee: "cooperative_confirmation_only",
+			Schema:                 "howlchangeops.approval/v1",
+			ApprovalID:             fmt.Sprintf("app-%x", sha256.Sum256([]byte(fmt.Sprintf("%s-%d", dec.ID, now.UnixNano()))))[:16],
+			DecisionID:             dec.ID,
+			DecisionDigest:         dec.Digest,
+			EvidenceDigest:         dec.RuntimeEvidence.EvidenceDigest,
+			Repo:                   dec.Proposal.Repo,
+			Action:                 dec.Proposal.Action,
+			Revision:               dec.Evidence.Revision,
+			Approver:               approverName(opts.approver),
+			Confirmation:           confirmation,
+			IssuedAt:               now.Format(time.RFC3339),
+			ExpiresAt:              now.Add(30 * time.Minute).Format(time.RFC3339),
+			Nonce:                  fmt.Sprintf("%d", now.UnixNano()),
 		}
 		app.Signature = signApproval(app, key)
 
@@ -1057,16 +1076,18 @@ func main() {
 
 		fmt.Printf("Decision %s approved.\n", decID)
 		appendAudit(map[string]interface{}{
-			"event":       "approve",
-			"decision_id": decID,
-			"approval_id": app.ApprovalID,
+			"event":                   "approve",
+			"authorization_guarantee": "cooperative_confirmation_only",
+			"decision_id":             decID,
+			"approval_id":             app.ApprovalID,
 		})
 		succeed("ok", map[string]any{
-			"decision_id":  decID,
-			"approval_id":  app.ApprovalID,
-			"approver":     app.Approver,
-			"confirmation": app.Confirmation,
-			"expires_at":   app.ExpiresAt,
+			"decision_id":             decID,
+			"approval_id":             app.ApprovalID,
+			"approver":                app.Approver,
+			"confirmation":            app.Confirmation,
+			"authorization_guarantee": "cooperative_confirmation_only",
+			"expires_at":              app.ExpiresAt,
 		})
 
 	case "execute":
@@ -1272,39 +1293,42 @@ func main() {
 		}
 
 		receipt := ExecutionReceipt{
-			Schema:         "howlchangeops.execution_receipt/v1",
-			DecisionID:     decID,
-			ApprovalID:     app.ApprovalID,
-			Action:         dec.Proposal.Action,
-			Repo:           dec.Proposal.Repo,
-			Revision:       rtEv.CurrentRevision,
-			ExecutedAt:     time.Now().UTC().Format(time.RFC3339),
-			Verification:   verStatus,
-			RollbackStatus: rollbackStatus,
-			ErrorMessage:   errMsg,
+			AuthorizationGuarantee: "cooperative_confirmation_only",
+			Schema:                 "howlchangeops.execution_receipt/v1",
+			DecisionID:             decID,
+			ApprovalID:             app.ApprovalID,
+			Action:                 dec.Proposal.Action,
+			Repo:                   dec.Proposal.Repo,
+			Revision:               rtEv.CurrentRevision,
+			ExecutedAt:             time.Now().UTC().Format(time.RFC3339),
+			Verification:           verStatus,
+			RollbackStatus:         rollbackStatus,
+			ErrorMessage:           errMsg,
 		}
 		recData, _ := json.MarshalIndent(receipt, "", "  ")
 		os.WriteFile(filepath.Join(receiptsDir, decID+".json"), recData, 0644)
 
 		appendAudit(map[string]interface{}{
-			"event":           "execute",
-			"decision_id":     decID,
-			"action":          dec.Proposal.Action,
-			"success":         success,
-			"verification":    verStatus,
-			"rollback_status": rollbackStatus,
-			"error":           errMsg,
+			"event":                   "execute",
+			"authorization_guarantee": "cooperative_confirmation_only",
+			"decision_id":             decID,
+			"action":                  dec.Proposal.Action,
+			"success":                 success,
+			"verification":            verStatus,
+			"rollback_status":         rollbackStatus,
+			"error":                   errMsg,
 		})
 
 		execData := map[string]any{
-			"decision_id":     decID,
-			"approval_id":     app.ApprovalID,
-			"action":          dec.Proposal.Action,
-			"repo":            dec.Proposal.Repo,
-			"revision":        rtEv.CurrentRevision,
-			"verification":    verStatus,
-			"rollback_status": rollbackStatus,
-			"receipt_schema":  receipt.Schema,
+			"authorization_guarantee": "cooperative_confirmation_only",
+			"decision_id":             decID,
+			"approval_id":             app.ApprovalID,
+			"action":                  dec.Proposal.Action,
+			"repo":                    dec.Proposal.Repo,
+			"revision":                rtEv.CurrentRevision,
+			"verification":            verStatus,
+			"rollback_status":         rollbackStatus,
+			"receipt_schema":          receipt.Schema,
 		}
 		if !success {
 			writeResult("failed", execData, "EXECUTION_FAILED", errMsg)

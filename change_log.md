@@ -16,3 +16,7 @@ Reject dirty validation starts and changed HEAD or working tree after checks.
 Keep actual results but fail snapshot binding when checks change the repository.
 Reject previously dirty cached envelopes so restored trees cannot reuse results
 from uncommitted source. Add public dirty-restore and test-mutation regressions.
+
+## Mission007 remediation
+
+F3 preparation: pure Ed25519 exact-binding verifier, strict claims/expiry validation and explicit model_b fail-closed approval/execution mode until protected deployment. Legacy records/results label cooperative guarantee; new guarantee is HMAC-bound. This does not complete Model B authentication or replay enforcement.

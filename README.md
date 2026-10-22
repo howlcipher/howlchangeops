@@ -15,7 +15,7 @@ As part of the broader Howl ecosystem alongside **HowlFrame** (orchestration & V
 2. **Inspect**: `howlchangeops inspect my_repo` retrieves verifiable Git states.
 3. **Validate**: `howlchangeops validate my_repo` runs tests and stores status safely in a cryptographically bound Evidence Envelope.
 4. **Evaluate**: Submit a JSON intent (e.g. `{"action": "create_release_candidate", "repo": "my_repo"}`). HowlChangeOps evaluates against a compiled `.hfbc` bytecode logic policy via the HowlFrame VM, safely outputting an evaluation decision (e.g. `REQUIRE_APPROVAL`).
-5. **Approve**: A human validates and signs off on the exact deterministic decision snapshot via `howlchangeops approve <decision_id>` at a terminal (or a tool relays the owner's decision with `--owner-confirmed`), which generates an HMAC-SHA256 signature over the decision, the approver and how the approval was confirmed.
+5. **Approve (legacy cooperative mode)**: A caller records a claimed owner decision for the deterministic snapshot via `howlchangeops approve <decision_id>` at a terminal (or a tool relays the owner's decision with `--owner-confirmed`), which generates a shared-key HMAC over the decision and caller assertions. This does not independently authenticate a human against a same-user agent.
 6. **Execute**: `howlchangeops execute <decision_id>` performs a bounded action (like creating a local Git tag) *only* if the repo's evidence is not stale (`STALE_EVIDENCE`) and the approval hasn't already been consumed.
 7. **Rollback**: `howlchangeops rollback <decision_id>` initiates governed, verified rollback workflows for previously executed actions.
 
@@ -31,7 +31,7 @@ HowlFrame Policy Engine (.howl → .hfbc)
    ↓ deterministic evaluation
 ALLOW / DENY / REQUIRE_APPROVAL
    ↓
-Human Authority Gate (HMAC-SHA256)
+Cooperative Confirmation Gate (shared-account HMAC-SHA256)
    ↓
 Evidence Revalidation & TOCTOU Verification
    ↓
@@ -44,7 +44,7 @@ Immutable Receipts, Rollback Recovery & Audit Trail
 2. **The Host Adapter (Go)**: The Go application handles Git/GitHub inspection, executes bounded commands securely, and invokes the HowlFrame runtime under strict sandbox capabilities. 
 
 ## Intent is not authority
-Proposals dictating actions, logic overrides, or fake approval metrics (like passing `"approved": true`) within the JSON payload are categorically rejected. AI dictates the proposition; HowlFrame owns the authorization machinery.
+Proposals dictating actions, logic overrides, or fake approval metrics (like passing `"approved": true`) within the JSON payload are categorically rejected. AI proposes; HowlFrame evaluates policy. Actual Model B authority additionally requires an independently protected executor and owner authenticator.
 
 ## Installation
 
@@ -227,7 +227,40 @@ To prevent disruption to existing automated workflows, `changeops` is preserved 
 - **HowlFrame Policy:** Retains exclusive ownership over capabilities, validation requirements, and approvals.
 
 ## Security limitations
-This V0.2 architecture bounds logical actions within a local operational domain utilizing the Host Go Adapter wrapper and HowlFrame's execution capabilities. It establishes a strong local trusted evidence foundation with HMAC-SHA256 approvals and strict replay prevention. Remote GitHub API ingestion provides TOCTOU protection.
+This V0.2 architecture bounds logical actions within a local operational domain utilizing the Host Go Adapter wrapper and HowlFrame's execution capabilities. Its shared-account HMAC records cooperative confirmation and integrity only; same-account agents can control signing material and local receipts. This does not implement independently authenticated approval or adversarial replay protection. Remote GitHub API ingestion provides TOCTOU protection.
 
 ## Business mapping
 The local HowlChangeOps implementation mirrors enterprise DevOps CI/CD integration models: AI acts as the proposer, a deterministic authority layer strictly handles permissions, and a trusted executor pushes the physical bounds only within predetermined logic loops.
+
+
+## Model B deployment status
+
+The owner selected independently authenticated approval (Model B). F3 remains
+unresolved until custody, trusted owner authentication, protected enforcement,
+and durable replay protection are deployed and independently tested.
+
+Set `"authorization_model": "model_b"` in the configuration to prohibit the
+legacy `approve` and `execute` paths. Both return status `blocked` and error code
+`INDEPENDENT_AUTHORIZATION_UNAVAILABLE` while the protected executor is absent,
+before reading decisions or invoking policy/execution. Unknown model values are
+blocked with `AUTHORIZATION_MODEL_INVALID`; there is no fallback from Model B.
+Omitted or `"cooperative"` preserves legacy behavior for compatibility and tests.
+Those results/audit events explicitly report
+`authorization_guarantee: cooperative_confirmation_only`. Terminal prompts,
+`--owner-confirmed`, caller-supplied names and HMACs never prove human identity.
+This local configuration is not a security boundary against the same UID that
+can edit it; deployment must deny agent access to protected executor policy.
+
+`internal/approval` is a pure, bounded Ed25519 envelope verifier foundation,
+not a deployed signer or executor. It checks exact action, target, immutable
+revision, request/evidence/parameter digests, audience, key enrollment and short
+expiry. The protocol requires canonical Go `encoding/json` serialization of the
+fixed structs and a versioned domain separator; alternate layouts/unknown or
+duplicate fields are rejected. It has no filesystem/network/key-custody access.
+A successful verification does not consume a nonce. A separately protected,
+durable ledger must atomically reserve approval ID and nonce before side effects,
+retain uncertain attempts and return prior receipts on retry. Its absence must
+block execution. No real credential custody, owner enrollment or release is
+performed by these source changes.
+
+Model B deployment preparation provides isolated signature verification and an explicit fail-closed mode. Protected signer/executor/enrollment/replay custody remains deployment work; terminal and relay confirmation remain cooperative only.

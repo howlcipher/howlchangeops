@@ -27,8 +27,8 @@ jobs:
 
     - name: Test and build adapter
       run: |
+        go test -v -race ./...
         cd adapter
-        go test -v ./...
         go build -o ../howlchangeops
         cd ..
         ln -sf howlchangeops changeops
