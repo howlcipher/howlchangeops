@@ -33,11 +33,20 @@ func DefaultAdapters(repoPath string) map[string]Adapter {
 				rev = rev[:7]
 			}
 			tag := fmt.Sprintf("howlchangeops/rc-%s", rev)
-			if repoPath != "" {
-				cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "tag", "-a", tag, "-m", "HowlChangeOps RC", req.Binding.Revision)
+			targetRepo := repoPath
+			if targetRepo == "" {
+				var p struct {
+					Repo string `json:"repo"`
+				}
+				if err := json.Unmarshal(req.Parameters, &p); err == nil && p.Repo != "" {
+					targetRepo = p.Repo
+				}
+			}
+			if targetRepo != "" {
+				cmd := exec.CommandContext(ctx, "git", "-C", targetRepo, "tag", "-a", tag, "-m", "HowlChangeOps RC", req.Binding.Revision)
 				if out, err := cmd.CombinedOutput(); err != nil {
 					// If tag already exists, verify it matches
-					verifyCmd := exec.CommandContext(ctx, "git", "-C", repoPath, "rev-parse", "-q", "--verify", fmt.Sprintf("refs/tags/%s^{commit}", tag))
+					verifyCmd := exec.CommandContext(ctx, "git", "-C", targetRepo, "rev-parse", "-q", "--verify", fmt.Sprintf("refs/tags/%s^{commit}", tag))
 					tagRev, vErr := verifyCmd.CombinedOutput()
 					if vErr != nil || !strings.HasPrefix(string(tagRev), rev) {
 						return nil, fmt.Errorf("%w: failed to create tag: %s (%v)", ErrAdapterExecution, string(out), err)
