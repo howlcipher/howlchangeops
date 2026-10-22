@@ -20,3 +20,10 @@ from uncommitted source. Add public dirty-restore and test-mutation regressions.
 ## Mission007 remediation
 
 F3 preparation: pure Ed25519 exact-binding verifier, strict claims/expiry validation and explicit model_b fail-closed approval/execution mode until protected deployment. Legacy records/results label cooperative guarantee; new guarantee is HMAC-bound. This does not complete Model B authentication or replay enforcement.
+
+* Add a source-only protected-executor interface and durable SQLite replay ledger,
+  with exact signed operation binding, reserve-before-effects, current enrollment
+  rechecks, bounded receipts and uncertain-crash refusal. Synthetic multi-process
+  tests cover persistence and duplicate prevention. Legacy explicit Model B CLI
+  remains unavailable; no owner authentication, credentials or real action adapter
+  is deployed. Authority storage requires CGO/POSIX protected paths.
