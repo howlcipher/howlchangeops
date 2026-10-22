@@ -264,3 +264,9 @@ block execution. No real credential custody, owner enrollment or release is
 performed by these source changes.
 
 Model B deployment preparation provides isolated signature verification and an explicit fail-closed mode. Protected signer/executor/enrollment/replay custody remains deployment work; terminal and relay confirmation remain cooperative only.
+
+Protected authority source foundation: see
+[the executor/ledger contract](docs/security/protected-authority.md).
+This module is not connected to production CLI execution; the explicit Model B
+CLI refusal remains enforced pending protected owner authentication, custody,
+credential migration and reviewed action-adapter deployment.
