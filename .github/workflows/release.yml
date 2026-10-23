@@ -64,21 +64,13 @@ jobs:
     strategy:
       matrix:
         include:
+          # Model B protected authority requires native CGO SQLite and POSIX 0700 file isolation.
+          # linux/amd64 is natively built and verified on ubuntu-latest.
+          # Cross-compilation to darwin/windows without native runners produces non-functional SQLite stubs
+          # or unsupported POSIX ACL semantics (paths_windows.go). Unverified platform artifacts are blocked.
           - goos: linux
             goarch: amd64
             ext: tar.gz
-          - goos: linux
-            goarch: arm64
-            ext: tar.gz
-          - goos: darwin
-            goarch: amd64
-            ext: tar.gz
-          - goos: darwin
-            goarch: arm64
-            ext: tar.gz
-          - goos: windows
-            goarch: amd64
-            ext: zip
 
     steps:
       - name: Checkout Code
@@ -106,20 +98,22 @@ jobs:
 
       - name: Build adapter binary and assemble archive
         env:
-          CGO_ENABLED: 0
+          CGO_ENABLED: 1
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
           BIN=howlchangeops
           ALIAS=changeops
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            BIN=howlchangeops.exe
-            ALIAS=changeops.exe
-          fi
 
           STAGE=$(mktemp -d)
           go build -o "$STAGE/$BIN" ./adapter
+
+          # Packaged runtime verification gate: ensure native authority commands function
+          "$STAGE/$BIN" interop --json > /dev/null
+          "$STAGE/$BIN" authority keygen auto owner-verify "$STAGE/verify.key" > /dev/null
+          rm -f "$STAGE/verify.key"
+
           # The changeops alias ships as a real second copy, not a symlink:
           # Howl's archive extractor rejects symlinked/hardlinked entries.
           cp "$STAGE/$BIN" "$STAGE/$ALIAS"
@@ -127,12 +121,7 @@ jobs:
           cp config/howlchangeops-config.example.json "$STAGE/howlchangeops-config.example.json"
 
           ARCHIVE_NAME=howlchangeops_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}
-          if [ "${{ matrix.ext }}" = "zip" ]; then
-            (cd "$STAGE" && zip "${ARCHIVE_NAME}.zip" ./*)
-            mv "$STAGE/${ARCHIVE_NAME}.zip" .
-          else
-            tar -czf "${ARCHIVE_NAME}.tar.gz" -C "$STAGE" .
-          fi
+          tar -czf "${ARCHIVE_NAME}.tar.gz" -C "$STAGE" .
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
