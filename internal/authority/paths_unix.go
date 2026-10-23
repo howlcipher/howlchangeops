@@ -24,3 +24,7 @@ func protectedAncestor(info os.FileInfo, path string) bool {
 	// the authority-owned next path component. Other writable ancestors fail.
 	return path == "/tmp" && stat.Uid == 0 && info.Mode()&os.ModeSticky != 0
 }
+
+func checkPlatformSupported() error {
+	return nil
+}

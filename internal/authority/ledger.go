@@ -49,6 +49,12 @@ func CreateLedger(path, audience string) (*Ledger, error) {
 }
 
 func openLedger(path, audience string, create bool) (*Ledger, error) {
+	if err := checkCgoSupported(); err != nil {
+		return nil, err
+	}
+	if err := checkPlatformSupported(); err != nil {
+		return nil, err
+	}
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(path, "?#\x00") || audience == "" || len(audience) > 1024 || strings.TrimSpace(audience) != audience || strings.ContainsAny(audience, "\x00\r\n") {
 		return nil, ErrInvalid
 	}
