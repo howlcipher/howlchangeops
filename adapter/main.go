@@ -16,7 +16,7 @@ import (
 
 // Version is HowlChangeOps's own release version. Bumped alongside each
 // tagged release; not derived from git state at build time.
-const Version = "0.2.0"
+const Version = "0.2.2"
 
 // CompatibleHowlFrameVersion is the HowlFrame release this build's
 // compiled policy (howlchangeops.hfbc) was built and verified against.
