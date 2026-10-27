@@ -96,7 +96,7 @@ func TestInteropDescriptorMatchesDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dispatched := map[string]bool{"interop": true, "version": true}
+	dispatched := map[string]bool{"interop": true, "version": true, "help": true}
 	ast.Inspect(file, func(n ast.Node) bool {
 		sw, ok := n.(*ast.SwitchStmt)
 		if !ok {
@@ -235,5 +235,33 @@ func TestInteropCommandPrintsTheDescriptor(t *testing.T) {
 	}
 	if len(d.Consumes) != 2 || d.Consumes[1].Command[0] != "run" {
 		t.Fatalf("consumes = %+v", d.Consumes)
+	}
+}
+
+func TestHelpCommand(t *testing.T) {
+	bin := buildAdapter(t)
+	dir := t.TempDir()
+	env := []string{
+		"PATH=" + os.Getenv("PATH"),
+		"XDG_CONFIG_HOME=" + filepath.Join(dir, "xdg"),
+		"HOWLCHANGEOPS_BASE=" + filepath.Join(dir, "state"),
+	}
+
+	for _, flag := range []string{"help", "--help", "-h"} {
+		cmd := exec.Command(bin, flag)
+		cmd.Dir = dir
+		cmd.Env = env
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s failed: %v\n%s", flag, err, out)
+		}
+		if !strings.Contains(string(out), "Usage:") || !strings.Contains(string(out), "authority") {
+			t.Fatalf("%s output missing expected usage text:\n%s", flag, out)
+		}
+	}
+
+	e, code := runJSON(t, bin, dir, env, "help", "--json")
+	if code != 0 || e.Status != "ok" || e.Data == nil {
+		t.Fatalf("help --json failed: code=%d %+v", code, e)
 	}
 }

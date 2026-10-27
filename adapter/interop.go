@@ -154,7 +154,8 @@ type interopConsume struct {
 // interopCommands mirrors the dispatch in main();
 // TestInteropDescriptorMatchesDispatch keeps them in step.
 var interopCommands = []interopCommand{
-	{Path: []string{}, Flags: []string{"--version"}},
+	{Path: []string{}, Flags: []string{"--version", "--help"}},
+	{Path: []string{"help"}, Flags: []string{"--json"}, JSON: true, Emits: []string{resultSchema}},
 	{Path: []string{"version"}, Flags: []string{"--json"}, JSON: true, Emits: []string{resultSchema}},
 	{Path: []string{"interop"}, Flags: []string{"--json"}, JSON: true, Emits: []string{"howl.interop/v1"}},
 	{Path: []string{"inspect"}, Flags: []string{}},

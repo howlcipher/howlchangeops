@@ -697,6 +697,42 @@ func appendAudit(entry map[string]interface{}) {
 	f.WriteString("\n")
 }
 
+func printUsage(progName string) {
+	fmt.Printf("%s — Change operations governance and Model B authority\n\n", progName)
+	fmt.Printf("Usage:\n  %s <command> [flags] [args...]\n\n", progName)
+	fmt.Println("General Commands:")
+	fmt.Println("  help, --help, -h       Show command help and usage")
+	fmt.Println("  version, --version     Print version and runtime compatibility")
+	fmt.Println("  interop                Emit machine-readable capability descriptor")
+	fmt.Println("")
+	fmt.Println("Repository Governance Commands:")
+	fmt.Println("  inspect <repo_id>      Inspect repository configuration and validation status")
+	fmt.Println("  validate <repo_id>     Run validation profile and generate evidence")
+	fmt.Println("  plan <repo_id>         Propose change plan for repository")
+	fmt.Println("  dogfood <repo_id>      Execute self-directed dogfood cycle")
+	fmt.Println("  evaluate <proposal>    Evaluate change proposal against HowlFrame policy")
+	fmt.Println("  approve <decision_id>  Record approval decision (cooperative mode)")
+	fmt.Println("  execute <decision_id>  Execute approved change against repository")
+	fmt.Println("  rollback <decision_id> Roll back executed change")
+	fmt.Println("  history <decision_id>  Show audit history for decision")
+	fmt.Println("  explain <decision_id>  Explain policy evaluation reasoning")
+	fmt.Println("")
+	fmt.Println("Protected Authority Commands:")
+	fmt.Println("  authority init <db> <audience>     Initialize protected replay ledger")
+	fmt.Println("  authority keygen <keyfile>         Generate Ed25519 owner keypair")
+	fmt.Println("  authority enroll <file> <key> <id> Enroll public key in authority state")
+	fmt.Println("  authority revoke <file> <key_id>   Revoke enrolled key")
+	fmt.Println("  authority review <req.json>        Validate signed execution request")
+	fmt.Println("  authority sign <req.json> <key>    Sign execution request with owner key")
+	fmt.Println("  authority execute <req.json>       Execute authorized change in protected sandbox")
+	fmt.Println("  authority status                   Show authority ledger status")
+	fmt.Println("")
+	fmt.Println("Global Flags:")
+	fmt.Println("  --json                 Output results as howl.result/v1 envelope")
+	fmt.Println("  --version              Display binary and HowlFrame compatibility version")
+	fmt.Println("  --help, -h             Display this help message")
+}
+
 func main() {
 	progName := filepath.Base(os.Args[0])
 	if progName != "changeops" && progName != "howlchangeops" {
@@ -722,6 +758,11 @@ func main() {
 	// .howlchangeops state directory present -- they are the installer's
 	// health and compatibility checks, run against a fresh install before any
 	// repo has been configured.
+	if cmd == "help" || cmd == "--help" || cmd == "-h" {
+		printUsage(progName)
+		succeed("ok", map[string]any{"commands": interopCommands})
+		return
+	}
 	if cmd == "interop" {
 		printInterop()
 		return
