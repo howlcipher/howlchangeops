@@ -280,6 +280,13 @@ func runAuthority(args []string) {
 			die("failed", "INVALID_REQUEST", "Failed to parse request: %v", err)
 		}
 
+		// Neither caller-selected files nor --yes prove independently protected
+		// custody or owner identity. Only the pure synthetic adapter is exposed
+		// for deterministic protocol tests; real actions remain unavailable.
+		if req.Binding.Action != "synthetic_action" {
+			die("blocked", "INDEPENDENT_AUTHORIZATION_UNAVAILABLE", "%s", "Protected authority deployment is unavailable; only synthetic protocol execution is supported")
+		}
+
 		envData, err := os.ReadFile(envFile)
 		if err != nil {
 			die("failed", "READ_FAILED", "Failed to read envelope file: %v", err)
@@ -311,11 +318,13 @@ func runAuthority(args []string) {
 		}
 
 		succeed("ok", map[string]any{
-			"status":       "executed",
-			"decision_id":  receipt.OperationID,
-			"approval_id":  receipt.ApprovalID,
-			"owner":        receipt.Owner,
-			"receipt_data": receipt,
+			"status":                  "executed",
+			"execution_kind":          "synthetic",
+			"authorization_guarantee": "synthetic_protocol_only",
+			"decision_id":             receipt.OperationID,
+			"approval_id":             receipt.ApprovalID,
+			"owner":                   receipt.Owner,
+			"receipt_data":            receipt,
 		})
 
 	case "status":

@@ -241,7 +241,8 @@ and durable replay protection are deployed and independently tested.
 
 Set `"authorization_model": "model_b"` in the configuration to prohibit the
 legacy `approve` and `execute` paths. Both return status `blocked` and error code
-`INDEPENDENT_AUTHORIZATION_UNAVAILABLE` while the protected executor is absent,
+`INDEPENDENT_AUTHORIZATION_UNAVAILABLE` regardless of caller-selected authority
+environment variables,
 before reading decisions or invoking policy/execution. Unknown model values are
 blocked with `AUTHORIZATION_MODEL_INVALID`; there is no fallback from Model B.
 Omitted or `"cooperative"` preserves legacy behavior for compatibility and tests.
@@ -267,6 +268,11 @@ Model B deployment preparation provides isolated signature verification and an e
 
 Protected authority source foundation: see
 [the executor/ledger contract](docs/security/protected-authority.md).
-This module is not connected to production CLI execution; the explicit Model B
-CLI refusal remains enforced pending protected owner authentication, custody,
-credential migration and reviewed action-adapter deployment.
+Source provisioning and signing commands and Git adapters exist; they are not
+proof of protected deployment. Both Model B `approve` and `execute` refuse
+unconditionally. The lower-level `authority execute` accepts only the pure
+`synthetic_action`, labels results `synthetic_protocol_only`, and refuses all real
+actions before reading the approval or ledger. `authority sign --yes` is caller
+confirmation, not independently authenticated owner approval. No flag, ledger
+path, or environment variable enables protected execution. Owner authentication,
+credential custody and a reviewed protected execution boundary remain unavailable.

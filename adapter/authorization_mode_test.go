@@ -24,7 +24,7 @@ func TestModelBUnavailableFailsClosedBeforeLegacyPaths(t *testing.T) {
 				}
 				cmd := exec.Command(bin, command, "synthetic-decision", "--owner-confirmed", "--json")
 				cmd.Dir = dir
-				cmd.Env = append(os.Environ(), "HOWLCHANGEOPS_CONFIG="+filepath.Join(dir, "howlchangeops.json"), "HOWLCHANGEOPS_BASE="+filepath.Join(dir, "state"))
+				cmd.Env = append(os.Environ(), "HOWLCHANGEOPS_CONFIG="+filepath.Join(dir, "howlchangeops.json"), "HOWLCHANGEOPS_BASE="+filepath.Join(dir, "state"), "HOWLCHANGEOPS_AUTHORITY_LEDGER="+filepath.Join(dir, "caller-selected.db"))
 				out, err := cmd.Output()
 				if err == nil {
 					t.Fatal("protected command unexpectedly succeeded")
@@ -47,5 +47,37 @@ func TestModelBUnavailableFailsClosedBeforeLegacyPaths(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// A caller-selected ledger, signer and enrollment never establish a protected
+// deployment. Refuse real actions before opening any supplied files or running git.
+func TestAuthorityCLIProtectedActionsUnavailable(t *testing.T) {
+	bin := buildChangeOpsBinary(t)
+	for _, action := range []string{"create_release_candidate", "rollback_release_candidate", "record_release_ready"} {
+		t.Run(action, func(t *testing.T) {
+			dir := t.TempDir()
+			request := filepath.Join(dir, "request.json")
+			data, _ := json.Marshal(map[string]any{"binding": map[string]string{"action": action}})
+			if err := os.WriteFile(request, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command(bin, "authority", "execute", filepath.Join(dir, "ledger.db"), "caller-audience", filepath.Join(dir, "enrollment.json"), request, filepath.Join(dir, "approval.json"), "--json")
+			cmd.Dir = dir
+			out, err := cmd.Output()
+			if err == nil {
+				t.Fatal("protected action unexpectedly succeeded")
+			}
+			res, err := parseResultEnvelope(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Status != "blocked" || res.Error == nil || res.Error.Code != "INDEPENDENT_AUTHORIZATION_UNAVAILABLE" {
+				t.Fatalf("unexpected refusal: %+v", res)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "ledger.db")); !os.IsNotExist(err) {
+				t.Fatalf("refused action touched ledger: %v", err)
+			}
+		})
 	}
 }
