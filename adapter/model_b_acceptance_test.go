@@ -254,10 +254,11 @@ func TestModelBCriterion3_AgentCannotModifySecurityPolicy(t *testing.T) {
 		t.Fatalf("arbitrary action must be rejected by fixed executor policy: %s", string(out))
 	}
 	res, err := parseResultEnvelope(out)
-	if err == nil {
-		if res.Status != "denied" {
-			t.Fatalf("expected denied status, got: %+v", res)
-		}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "blocked" || res.Error == nil || res.Error.Code != "INDEPENDENT_AUTHORIZATION_UNAVAILABLE" {
+		t.Fatalf("expected unavailable protected deployment, got: %+v", res)
 	}
 }
 
@@ -413,6 +414,14 @@ func TestModelBCriterion6_ExpiredOrReplayedApprovalsRejected(t *testing.T) {
 	out1, err := cmd1.CombinedOutput()
 	if err != nil {
 		t.Fatalf("first execution failed: %v\n%s", err, string(out1))
+	}
+
+	first, err := parseResultEnvelope(out1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Data["execution_kind"] != "synthetic" || first.Data["authorization_guarantee"] != "synthetic_protocol_only" {
+		t.Fatalf("synthetic execution must not claim protected authorization: %+v", first)
 	}
 
 	// Sub-case B: Replay of the exact same approval on a different operation must be rejected

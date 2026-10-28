@@ -1,8 +1,15 @@
 # Protected executor and durable replay ledger foundation
 
 This source package does not deploy independently authenticated owner approval.
-The existing explicit `model_b` CLI remains blocked. No signer, owner enrollment,
-authentication service, protected release adapter or credential is installed.
+The explicit `model_b` approval and execution paths remain blocked regardless of
+caller environment variables. `authority execute` permits only the existing pure
+`synthetic_action` for deterministic protocol tests, labeled `synthetic_protocol_only`;
+it refuses every real action before opening its approval or ledger.
+
+Source CLIs for key generation, enrollment, signing and revocation and Git action
+adapters exist, but no independently authenticated owner or protected deployment
+is established. `authority sign --yes` is caller confirmation, never authentication.
+Do not expose signing keys, enrollment, or real execution to autonomous workers.
 
 ## Placement and guarantees
 
@@ -27,7 +34,8 @@ or cooperative fallback. These fail-closed cases do not enable execution.
 Schema v1 is an embedded, version-controlled transaction used only by explicit
 protected `CreateLedger` provisioning. Creation is exclusive and refuses every
 existing path; failed provisioning retains its artifact for owner review. This
-API is not an owner authenticator and has no CLI enrollment command. Runtime
+API is not an owner authenticator. The enrollment CLI is a provisioning utility,
+not an independent owner-authentication boundary. Runtime
 `OpenLedger` uses SQLite read/write-existing mode and requires an existing,
 nonempty v1 database with its replay tables and metadata; missing, truncated,
 empty-schema or damaged state refuses, never initializes fresh replay storage.
@@ -109,7 +117,10 @@ multiple handles and actual concurrent OS processes, approval/nonce/operation
 collisions, subprocess death after reservation and after a synthetic effect,
 reopen/refusal, receipts and corruption, expiry/revocation/unavailable signer,
 path restrictions, bounded storage/output, and callback error/panic/cancellation.
-The CLI model_b refusal tests remain unchanged. Mocked state/authenticator inputs
+CLI tests enforce model_b refusal even with a caller-selected ledger, and
+refuse real authority actions through the lower-level CLI. Synthetic-only CLI
+tests still exercise actual signature verification and persistent replay state.
+Mocked state/authenticator inputs
 are not real human authentication or custody evidence.
 
 Before enabling a production entry point, independently review the host

@@ -724,7 +724,7 @@ func printUsage(progName string) {
 	fmt.Println("  authority revoke <file> <key_id>   Revoke enrolled key")
 	fmt.Println("  authority review <req.json>        Validate signed execution request")
 	fmt.Println("  authority sign <req.json> <key>    Sign execution request with owner key")
-	fmt.Println("  authority execute <req.json>       Execute authorized change in protected sandbox")
+	fmt.Println("  authority execute <req.json>       Run synthetic protocol test; real actions blocked")
 	fmt.Println("  authority status                   Show authority ledger status")
 	fmt.Println("")
 	fmt.Println("Global Flags:")
@@ -792,9 +792,9 @@ func main() {
 	}
 	if cfg.AuthorizationModel == "model_b" {
 		if cmd == "approve" {
-			die("blocked", "INDEPENDENT_AUTHORIZATION_UNAVAILABLE", "%s", "Model B requires independent owner signing; use 'howlchangeops authority sign' outside the agent session")
+			die("blocked", "INDEPENDENT_AUTHORIZATION_UNAVAILABLE", "%s", "Model B requires independently protected owner authentication; caller signing commands do not establish deployment")
 		}
-		if cmd == "execute" && os.Getenv("HOWLCHANGEOPS_AUTHORITY_LEDGER") == "" {
+		if cmd == "execute" {
 			die("blocked", "INDEPENDENT_AUTHORIZATION_UNAVAILABLE", "%s", "Model B protected executor is not deployed; terminal confirmation and owner-confirmed flags cannot authorize this operation")
 		}
 	}

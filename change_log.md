@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+* Restore unconditional Model B execution refusal despite caller-selected ledger
+  environment variables. Refuse all real lower-level `authority execute` actions
+  until independently authenticated protected deployment exists; preserve and
+  explicitly label pure synthetic protocol tests. Regressions reproduce the
+  former environment bypass and cover all three real adapter actions.
+* Correct protected-authority documentation: provisioning/signing CLIs and real
+  Git adapters exist in source but do not establish independent identity or
+  custody; `--yes` is never authentication.
+
+
 * Add explicit trusted-repository python-stdlib validation with positive unittest discovery, independent in-memory tracked-source compilation, bounded output and deadlines, POSIX group cancellation, and truthful failed evidence. Windows fails closed; Go evidence fields and authority policy remain compatible.
 * Add Python profile regressions for nonpackage imports, stdlib shadowing, empty/missing/failing tests, syntax and unsafe-source failures, deadlines, retained output digests, no bytecode writes, and public failure behavior.
 
